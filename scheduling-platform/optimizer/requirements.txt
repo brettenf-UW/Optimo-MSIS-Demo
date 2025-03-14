@@ -1,0 +1,22 @@
+# Web framework
+flask==2.3.3
+flask-cors==4.0.0
+gunicorn==21.2.0
+
+# Data processing
+numpy==1.25.2
+pandas==2.1.0
+
+# Optimization
+gurobipy==10.0.0
+pulp==2.7.0
+
+# Testing and linting
+pytest==7.4.0
+pytest-cov==4.1.0
+black==23.7.0
+mypy==1.5.1
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0

@@ -1,0 +1,72 @@
+Section ID,Course ID,Capacity,Enrollment,Utilization,Status
+S002,Medical Career,3,3,1.0,High
+S003,Heroes Teach,15,3,0.2,Low
+S004,Heroes Teach,15,3,0.2,Low
+S005,Study Hall,25,12,0.48,Good
+S006,Study Hall,25,12,0.48,Good
+S007,Study Hall,25,12,0.48,Good
+S008,Study Hall,25,12,0.48,Good
+S009,Study Hall,25,12,0.48,Good
+S010,Study Hall,25,11,0.44,Good
+S011,Study Hall,25,12,0.48,Good
+S012,Study Hall,25,12,0.48,Good
+S013,Study Hall,25,11,0.44,Good
+S014,Sports Med,15,13,0.8666666666666667,Good
+S015,Sports Med,15,13,0.8666666666666667,Good
+S016,Sports Med,15,13,0.8666666666666667,Good
+S017,Sports Med,15,13,0.8666666666666667,Good
+S018,Sports Med,15,12,0.8,Good
+S019,Sports Med,15,12,0.8,Good
+S020,Sports Med,15,12,0.8,Good
+S021,Sports Med,15,12,0.8,Good
+S022,PE,35,22,0.6285714285714286,Good
+S023,PE,35,22,0.6285714285714286,Good
+S024,PE,35,21,0.6,Good
+S025,PE,35,21,0.6,Good
+S026,English 12,25,11,0.44,Good
+S027,English 12,25,10,0.4,Good
+S028,English 12,25,10,0.4,Good
+S029,Biology,30,23,0.7666666666666667,Good
+S030,Biology,30,22,0.7333333333333333,Good
+S031,English 9,25,10,0.4,Good
+S032,English 9,25,10,0.4,Good
+S033,English 9,25,9,0.36,Good
+S034,Economics,25,16,0.64,Good
+S035,Economics,25,16,0.64,Good
+S036,Economics,25,15,0.6,Good
+S037,Math 1,25,13,0.52,Good
+S038,Math 1,25,13,0.52,Good
+S039,Math 1,25,12,0.48,Good
+S040,Math 4,25,10,0.4,Good
+S041,Math 4,25,10,0.4,Good
+S042,Math 4,25,10,0.4,Good
+S043,US History,25,12,0.48,Good
+S044,US History,25,12,0.48,Good
+S045,US History,25,12,0.48,Good
+S046,Chemistry,30,24,0.8,Good
+S047,Chemistry,30,24,0.8,Good
+S048,Government,25,14,0.56,Good
+S049,Government,25,14,0.56,Good
+S050,Government,25,13,0.52,Good
+S051,Math 3,25,12,0.48,Good
+S052,Math 3,25,11,0.44,Good
+S053,Math 3,25,11,0.44,Good
+S054,English 10,25,14,0.56,Good
+S055,English 10,25,14,0.56,Good
+S056,English 10,25,14,0.56,Good
+S057,English 11,25,14,0.56,Good
+S058,English 11,25,13,0.52,Good
+S059,English 11,25,13,0.52,Good
+S060,Math 2,25,16,0.64,Good
+S061,Math 2,25,16,0.64,Good
+S062,Math 2,25,16,0.64,Good
+S063,World History,25,9,0.36,Good
+S064,World History,25,9,0.36,Good
+S065,World History,25,8,0.32,Good
+S066,AP Biology,30,24,0.8,Good
+S067,AP Biology,30,23,0.7666666666666667,Good
+S068,Physics,30,24,0.8,Good
+S069,Physics,30,23,0.7666666666666667,Good
+S002_B,Medical Career,3,3,1.0,High
+S070,Heroes Teach,15,2,0.13333333333333333,Low
+S071,Heroes Teach,15,2,0.13333333333333333,Low

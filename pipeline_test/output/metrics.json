@@ -1,0 +1,10 @@
+{
+  "total_time": 3.5840582847595215,
+  "greedy_time": 2.7058234214782715,
+  "milp_time": 0.0947866439819336,
+  "agent_time": 0.6952011585235596,
+  "initial_utilization": 0.5608419599723946,
+  "final_utilization": 0.523522504892368,
+  "iterations": 5,
+  "sections_adjusted": 217
+}
