@@ -1,12 +1,12 @@
 {
-  "total_sections": 73,
-  "scheduled_sections": 71,
-  "total_assignments": 938,
-  "total_students": 200,
-  "average_utilization": 0.523522504892368,
-  "min_utilization": 0.0,
+  "total_sections": 29,
+  "scheduled_sections": 29,
+  "total_assignments": 467,
+  "total_students": 100,
+  "average_utilization": 0.5651888341543514,
+  "min_utilization": 0.2571428571428571,
   "max_utilization": 0.8666666666666667,
-  "underutilized_sections": 58,
+  "underutilized_sections": 25,
   "iterations": 5,
   "total_time": 0
 }

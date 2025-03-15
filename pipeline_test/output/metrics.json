@@ -1,10 +1,10 @@
 {
-  "total_time": 3.5840582847595215,
-  "greedy_time": 2.7058234214782715,
-  "milp_time": 0.0947866439819336,
-  "agent_time": 0.6952011585235596,
-  "initial_utilization": 0.5608419599723946,
-  "final_utilization": 0.523522504892368,
+  "total_time": 47.82195591926575,
+  "greedy_time": 0.48185205459594727,
+  "milp_time": 0.45831751823425293,
+  "agent_time": 46.83334922790527,
+  "initial_utilization": 0.47031055900621116,
+  "final_utilization": 0.5651888341543514,
   "iterations": 5,
-  "sections_adjusted": 217
+  "sections_adjusted": 125
 }

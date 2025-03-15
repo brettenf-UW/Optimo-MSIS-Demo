@@ -1,0 +1,39 @@
+2025-03-14 23:38:51,081 - INFO - Data loader initialized successfully
+2025-03-14 23:38:51,081 - INFO - Starting data load process...
+2025-03-14 23:38:51,081 - INFO - Loading base data files...
+2025-03-14 23:38:51,082 - INFO - Students loaded: 200 records
+2025-03-14 23:38:51,083 - INFO - Teachers loaded: 25 records
+2025-03-14 23:38:51,084 - INFO - Sections loaded: 72 records
+2025-03-14 23:38:51,085 - INFO - Periods loaded: 8 records
+2025-03-14 23:38:51,085 - INFO - Loading relationship data...
+2025-03-14 23:38:51,086 - INFO - Student preferences: 200 records
+2025-03-14 23:38:51,087 - INFO - Teacher unavailability: 4 records
+2025-03-14 23:38:51,087 - INFO - Validating data relationships...
+2025-03-14 23:38:51,092 - INFO - All relationships are valid
+2025-03-14 23:38:51,092 - INFO - Data loaded and validated successfully
+2025-03-14 23:38:51,775 - INFO - Data loader initialized successfully
+2025-03-14 23:38:51,775 - INFO - Starting data load process...
+2025-03-14 23:38:51,775 - INFO - Loading base data files...
+2025-03-14 23:38:51,776 - INFO - Students loaded: 200 records
+2025-03-14 23:38:51,777 - INFO - Teachers loaded: 25 records
+2025-03-14 23:38:51,778 - INFO - Sections loaded: 74 records
+2025-03-14 23:38:51,779 - INFO - Periods loaded: 8 records
+2025-03-14 23:38:51,779 - INFO - Loading relationship data...
+2025-03-14 23:38:51,780 - INFO - Student preferences: 200 records
+2025-03-14 23:38:51,781 - INFO - Teacher unavailability: 4 records
+2025-03-14 23:38:51,782 - INFO - Validating data relationships...
+2025-03-14 23:38:51,786 - INFO - All relationships are valid
+2025-03-14 23:38:51,786 - INFO - Data loaded and validated successfully
+2025-03-14 23:38:52,460 - INFO - Data loader initialized successfully
+2025-03-14 23:38:52,460 - INFO - Starting data load process...
+2025-03-14 23:38:52,460 - INFO - Loading base data files...
+2025-03-14 23:38:52,462 - INFO - Students loaded: 200 records
+2025-03-14 23:38:52,463 - INFO - Teachers loaded: 25 records
+2025-03-14 23:38:52,464 - INFO - Sections loaded: 76 records
+2025-03-14 23:38:52,465 - INFO - Periods loaded: 8 records
+2025-03-14 23:38:52,465 - INFO - Loading relationship data...
+2025-03-14 23:38:52,466 - INFO - Student preferences: 200 records
+2025-03-14 23:38:52,467 - INFO - Teacher unavailability: 4 records
+2025-03-14 23:38:52,467 - INFO - Validating data relationships...
+2025-03-14 23:38:52,472 - INFO - All relationships are valid
+2025-03-14 23:38:52,472 - INFO - Data loaded and validated successfully

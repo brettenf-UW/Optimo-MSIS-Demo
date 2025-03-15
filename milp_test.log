@@ -1,0 +1,262 @@
+2025-03-15 01:48:44,905 - milp_test - INFO - ================================================================================
+2025-03-15 01:48:44,906 - milp_test - INFO - TESTING MILP OPTIMIZER (NO WARM START)
+2025-03-15 01:48:44,906 - milp_test - INFO - ================================================================================
+2025-03-15 01:48:44,906 - src.data.loader - INFO - Data loader initialized successfully
+2025-03-15 01:48:44,907 - src.data.loader - INFO - Starting data load process...
+2025-03-15 01:48:44,907 - src.data.loader - INFO - Loading base data files...
+2025-03-15 01:48:44,909 - src.data.loader - INFO - Students loaded: 100 records
+2025-03-15 01:48:44,910 - src.data.loader - INFO - Teachers loaded: 16 records
+2025-03-15 01:48:44,912 - src.data.loader - INFO - Sections loaded: 46 records
+2025-03-15 01:48:44,913 - src.data.loader - INFO - Periods loaded: 8 records
+2025-03-15 01:48:44,914 - src.data.loader - INFO - Loading relationship data...
+2025-03-15 01:48:44,915 - src.data.loader - INFO - Student preferences: 100 records
+2025-03-15 01:48:44,916 - src.data.loader - INFO - Teacher unavailability: 1 records
+2025-03-15 01:48:44,916 - src.data.loader - INFO - Validating data relationships...
+2025-03-15 01:48:44,923 - src.data.loader - INFO - All relationships are valid
+2025-03-15 01:48:44,924 - src.data.loader - INFO - Data loaded and validated successfully
+2025-03-15 01:48:44,953 - milp_test - INFO - Creating MILP optimizer with 100 students, 16 teachers, 46 sections, 8 periods
+2025-03-15 01:48:44,954 - milp_test - INFO - Special sections: [('S001', 'Medical Career'), ('S002', 'Medical Career'), ('S003', 'Heroes Teach'), ('S004', 'Heroes Teach')]
+2025-03-15 01:48:44,954 - src.algorithms.milp - INFO - Medical Career restricted to periods: ['R1', 'G1']
+2025-03-15 01:48:44,954 - src.algorithms.milp - INFO - Heroes Teach restricted to periods: ['R2', 'G2']
+2025-03-15 01:48:44,954 - src.algorithms.milp - INFO - Initialized MILP optimizer with: 100 students, 16 teachers, 46 sections, 8 periods, no warm start
+2025-03-15 01:48:44,954 - milp_test - INFO - Course period restrictions:
+2025-03-15 01:48:44,954 - milp_test - INFO -   Medical Career: ['R1', 'G1']
+2025-03-15 01:48:44,955 - milp_test - INFO -   Heroes Teach: ['R2', 'G2']
+2025-03-15 01:48:44,955 - milp_test - INFO - Starting MILP optimization...
+2025-03-15 01:48:44,955 - src.algorithms.milp - INFO - Starting MILP optimization...
+2025-03-15 01:48:44,955 - src.algorithms.milp - INFO - Building MILP model...
+2025-03-15 01:48:44,956 - gurobipy.gurobipy - INFO - Set parameter WLSAccessID
+2025-03-15 01:48:44,956 - gurobipy.gurobipy - INFO - Set parameter WLSSecret
+2025-03-15 01:48:44,956 - gurobipy.gurobipy - INFO - Set parameter LicenseID to value 2628134
+2025-03-15 01:48:45,257 - gurobipy.gurobipy - INFO - Academic license 2628134 - for non-commercial use only - registered to bs___@uw.edu
+2025-03-15 01:48:45,258 - gurobipy.gurobipy - INFO - Set parameter TimeLimit to value 3600
+2025-03-15 01:48:45,258 - gurobipy.gurobipy - INFO - Set parameter Presolve to value 1
+2025-03-15 01:48:45,258 - gurobipy.gurobipy - INFO - Set parameter Method to value 1
+2025-03-15 01:48:45,259 - gurobipy.gurobipy - INFO - Set parameter MIPFocus to value 1
+2025-03-15 01:48:45,259 - gurobipy.gurobipy - INFO - Set parameter MIPGap to value 0.1
+2025-03-15 01:48:45,259 - gurobipy.gurobipy - INFO - Set parameter MemLimit to value 14336
+2025-03-15 01:48:45,260 - gurobipy.gurobipy - INFO - Set parameter NodefileStart to value 0.95
+2025-03-15 01:48:45,260 - gurobipy.gurobipy - INFO - Set parameter NodefileDir to value "/tmp/gurobi_nodefiles"
+2025-03-15 01:48:45,261 - src.algorithms.milp - INFO - Added constraint: special section S001 (Medical Career) must be assigned to one of ['R1', 'G1']
+2025-03-15 01:48:45,261 - src.algorithms.milp - INFO - Added constraint: special section S002 (Medical Career) must be assigned to one of ['R1', 'G1']
+2025-03-15 01:48:45,261 - src.algorithms.milp - INFO - Added constraint: special section S003 (Heroes Teach) must be assigned to one of ['R2', 'G2']
+2025-03-15 01:48:45,261 - src.algorithms.milp - INFO - Added constraint: special section S004 (Heroes Teach) must be assigned to one of ['R2', 'G2']
+2025-03-15 01:48:45,322 - milp_test - ERROR - MILP optimization failed: ('S003', 'R1')
+Traceback (most recent call last):
+  File "/app/test_milp_only.py", line 94, in test_clean_milp
+    schedule = milp_optimizer.optimize()
+  File "/app/scheduling-platform/optimizer/src/algorithms/milp.py", line 501, in optimize
+    model = self.build_model()
+  File "/app/scheduling-platform/optimizer/src/algorithms/milp.py", line 243, in build_model
+    gp.quicksum(section_period[(section_id, period_id)]
+  File "src/gurobipy/gurobi.pxi", line 3706, in gurobipy.quicksum
+  File "/app/scheduling-platform/optimizer/src/algorithms/milp.py", line 243, in <genexpr>
+    gp.quicksum(section_period[(section_id, period_id)]
+KeyError: ('S003', 'R1')
+2025-03-15 01:48:45,331 - milp_test - INFO - Test completed!
+2025-03-15 01:51:37,471 - milp_test - INFO - ================================================================================
+2025-03-15 01:51:37,471 - milp_test - INFO - TESTING MILP OPTIMIZER (NO WARM START)
+2025-03-15 01:51:37,471 - milp_test - INFO - ================================================================================
+2025-03-15 01:51:37,472 - src.data.loader - INFO - Data loader initialized successfully
+2025-03-15 01:51:37,472 - src.data.loader - INFO - Starting data load process...
+2025-03-15 01:51:37,473 - src.data.loader - INFO - Loading base data files...
+2025-03-15 01:51:37,475 - src.data.loader - INFO - Students loaded: 100 records
+2025-03-15 01:51:37,476 - src.data.loader - INFO - Teachers loaded: 16 records
+2025-03-15 01:51:37,478 - src.data.loader - INFO - Sections loaded: 46 records
+2025-03-15 01:51:37,479 - src.data.loader - INFO - Periods loaded: 8 records
+2025-03-15 01:51:37,480 - src.data.loader - INFO - Loading relationship data...
+2025-03-15 01:51:37,481 - src.data.loader - INFO - Student preferences: 100 records
+2025-03-15 01:51:37,482 - src.data.loader - INFO - Teacher unavailability: 1 records
+2025-03-15 01:51:37,483 - src.data.loader - INFO - Validating data relationships...
+2025-03-15 01:51:37,489 - src.data.loader - INFO - All relationships are valid
+2025-03-15 01:51:37,490 - src.data.loader - INFO - Data loaded and validated successfully
+2025-03-15 01:51:37,515 - milp_test - INFO - Creating MILP optimizer with 100 students, 16 teachers, 46 sections, 8 periods
+2025-03-15 01:51:37,515 - milp_test - INFO - Special sections: [('S001', 'Medical Career'), ('S002', 'Medical Career'), ('S003', 'Heroes Teach'), ('S004', 'Heroes Teach')]
+2025-03-15 01:51:37,515 - src.algorithms.milp - INFO - Medical Career restricted to periods: ['R1', 'G1']
+2025-03-15 01:51:37,515 - src.algorithms.milp - INFO - Heroes Teach restricted to periods: ['R2', 'G2']
+2025-03-15 01:51:37,516 - src.algorithms.milp - INFO - Initialized MILP optimizer with: 100 students, 16 teachers, 46 sections, 8 periods, no warm start
+2025-03-15 01:51:37,516 - milp_test - INFO - Course period restrictions:
+2025-03-15 01:51:37,516 - milp_test - INFO -   Medical Career: ['R1', 'G1']
+2025-03-15 01:51:37,516 - milp_test - INFO -   Heroes Teach: ['R2', 'G2']
+2025-03-15 01:51:37,516 - milp_test - INFO - Starting MILP optimization...
+2025-03-15 01:51:37,516 - src.algorithms.milp - INFO - Starting MILP optimization...
+2025-03-15 01:51:37,517 - src.algorithms.milp - INFO - Building MILP model...
+2025-03-15 01:51:37,518 - gurobipy.gurobipy - INFO - Set parameter WLSAccessID
+2025-03-15 01:51:37,518 - gurobipy.gurobipy - INFO - Set parameter WLSSecret
+2025-03-15 01:51:37,518 - gurobipy.gurobipy - INFO - Set parameter LicenseID to value 2628134
+2025-03-15 01:51:37,808 - gurobipy.gurobipy - INFO - Academic license 2628134 - for non-commercial use only - registered to bs___@uw.edu
+2025-03-15 01:51:37,810 - gurobipy.gurobipy - INFO - Set parameter TimeLimit to value 3600
+2025-03-15 01:51:37,811 - gurobipy.gurobipy - INFO - Set parameter Presolve to value 1
+2025-03-15 01:51:37,811 - gurobipy.gurobipy - INFO - Set parameter Method to value 1
+2025-03-15 01:51:37,811 - gurobipy.gurobipy - INFO - Set parameter MIPFocus to value 1
+2025-03-15 01:51:37,811 - gurobipy.gurobipy - INFO - Set parameter MIPGap to value 0.1
+2025-03-15 01:51:37,812 - gurobipy.gurobipy - INFO - Set parameter MemLimit to value 14336
+2025-03-15 01:51:37,812 - gurobipy.gurobipy - INFO - Set parameter NodefileStart to value 0.95
+2025-03-15 01:51:37,812 - gurobipy.gurobipy - INFO - Set parameter NodefileDir to value "/tmp/gurobi_nodefiles"
+2025-03-15 01:51:37,813 - src.algorithms.milp - INFO - Added constraint: special section S001 (Medical Career) must be assigned to one of ['R1', 'G1']
+2025-03-15 01:51:37,813 - src.algorithms.milp - INFO - Added constraint: special section S002 (Medical Career) must be assigned to one of ['R1', 'G1']
+2025-03-15 01:51:37,813 - src.algorithms.milp - INFO - Added constraint: special section S003 (Heroes Teach) must be assigned to one of ['R2', 'G2']
+2025-03-15 01:51:37,813 - src.algorithms.milp - INFO - Added constraint: special section S004 (Heroes Teach) must be assigned to one of ['R2', 'G2']
+2025-03-15 01:51:38,725 - src.algorithms.milp - INFO - Model built in 1.21 seconds
+2025-03-15 01:51:38,725 - src.algorithms.milp - INFO - Model has 0 variables and 0 constraints
+2025-03-15 01:51:38,753 - gurobipy.gurobipy - INFO - Gurobi Optimizer version 10.0.0 build v10.0.0rc2 (linux64)
+2025-03-15 01:51:38,753 - gurobipy.gurobipy - INFO - 
+2025-03-15 01:51:38,754 - gurobipy.gurobipy - INFO - CPU model: Intel(R) Xeon(R) Platinum 8375C CPU @ 2.90GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+2025-03-15 01:51:38,754 - gurobipy.gurobipy - INFO - Thread count: 1 physical cores, 2 logical processors, using up to 2 threads
+2025-03-15 01:51:38,754 - gurobipy.gurobipy - INFO - 
+2025-03-15 01:51:38,755 - gurobipy.gurobipy - INFO - Academic license 2628134 - for non-commercial use only - registered to bs___@uw.edu
+2025-03-15 01:51:38,755 - gurobipy.gurobipy - INFO - Optimize a model with 36098 rows, 13440 columns and 104804 nonzeros
+2025-03-15 01:51:38,757 - gurobipy.gurobipy - INFO - Model fingerprint: 0x722a1537
+2025-03-15 01:51:38,757 - gurobipy.gurobipy - INFO - Variable types: 0 continuous, 13440 integer (13394 binary)
+2025-03-15 01:51:38,758 - gurobipy.gurobipy - INFO - Coefficient statistics:
+2025-03-15 01:51:38,758 - gurobipy.gurobipy - INFO -   Matrix range     [1e+00, 1e+00]
+2025-03-15 01:51:38,758 - gurobipy.gurobipy - INFO -   Objective range  [1e+00, 1e+03]
+2025-03-15 01:51:38,758 - gurobipy.gurobipy - INFO -   Bounds range     [1e+00, 1e+00]
+2025-03-15 01:51:38,758 - gurobipy.gurobipy - INFO -   RHS range        [1e+00, 4e+01]
+2025-03-15 01:51:38,764 - gurobipy.gurobipy - INFO - Found heuristic solution: objective -599540.0000
+2025-03-15 01:51:39,019 - gurobipy.gurobipy - INFO - Presolve removed 110 rows and 38 columns
+2025-03-15 01:51:39,019 - gurobipy.gurobipy - INFO - Presolve time: 0.25s
+2025-03-15 01:51:39,020 - gurobipy.gurobipy - INFO - Presolved: 35988 rows, 13402 columns, 103746 nonzeros
+2025-03-15 01:51:39,053 - gurobipy.gurobipy - INFO - Variable types: 0 continuous, 13402 integer (13390 binary)
+2025-03-15 01:51:39,059 - gurobipy.gurobipy - INFO - Found heuristic solution: objective -351192.0000
+2025-03-15 01:51:43,728 - gurobipy.gurobipy - INFO - 
+2025-03-15 01:51:43,728 - gurobipy.gurobipy - INFO - Root relaxation: objective 1.526500e+03, 19462 iterations, 4.67 seconds (9.60 work units)
+2025-03-15 01:51:46,431 - gurobipy.gurobipy - INFO - Total elapsed time = 7.68s
+2025-03-15 01:51:49,689 - gurobipy.gurobipy - INFO - 
+2025-03-15 01:51:49,689 - gurobipy.gurobipy - INFO -     Nodes    |    Current Node    |     Objective Bounds      |     Work
+2025-03-15 01:51:49,689 - gurobipy.gurobipy - INFO -  Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+2025-03-15 01:51:49,689 - gurobipy.gurobipy - INFO - 
+2025-03-15 01:51:49,689 - gurobipy.gurobipy - INFO -      0     0 1526.50000    0 1028 -351192.00 1526.50000   100%     -   10s
+2025-03-15 01:51:49,701 - gurobipy.gurobipy - INFO - H    0     0                    -88765.00000 1526.50000   102%     -   10s
+2025-03-15 01:51:49,736 - gurobipy.gurobipy - INFO - H    0     0                    -64765.00000 1526.50000   102%     -   10s
+2025-03-15 01:52:04,014 - gurobipy.gurobipy - INFO -      0     0 1525.00183    0 2752 -64765.000 1525.00183   102%     -   25s
+2025-03-15 01:52:04,473 - gurobipy.gurobipy - INFO - H    0     0                    -49872.00000 1525.00183   103%     -   25s
+2025-03-15 01:52:04,759 - gurobipy.gurobipy - INFO - H    0     0                    -39744.00000 1525.00183   104%     -   26s
+2025-03-15 01:52:04,787 - gurobipy.gurobipy - INFO - H    0     0                    -32740.00000 1525.00183   105%     -   26s
+2025-03-15 01:52:05,645 - gurobipy.gurobipy - INFO -      0     0 1525.00183    0 3055 -32740.000 1525.00183   105%     -   26s
+2025-03-15 01:52:36,400 - gurobipy.gurobipy - INFO -      0     0 1520.21172    0 4394 -32740.000 1520.21172   105%     -   57s
+2025-03-15 01:52:36,452 - gurobipy.gurobipy - INFO - H    0     0                    -12851.00000 1520.21172   112%     -   57s
+2025-03-15 01:52:36,478 - gurobipy.gurobipy - INFO - H    0     0                    -9850.000000 1520.21172   115%     -   57s
+2025-03-15 01:52:41,992 - gurobipy.gurobipy - INFO -      0     0 1518.86927    0 4798 -9850.0000 1518.86927   115%     -   63s
+2025-03-15 01:52:52,402 - gurobipy.gurobipy - INFO -      0     0 1517.91602    0 4695 -9850.0000 1517.91602   115%     -   73s
+2025-03-15 01:52:54,063 - gurobipy.gurobipy - INFO -      0     0 1517.67023    0 4294 -9850.0000 1517.67023   115%     -   75s
+2025-03-15 01:52:54,715 - gurobipy.gurobipy - INFO -      0     0 1517.64261    0 4257 -9850.0000 1517.64261   115%     -   75s
+2025-03-15 01:52:55,237 - gurobipy.gurobipy - INFO -      0     0 1517.62701    0 3998 -9850.0000 1517.62701   115%     -   76s
+2025-03-15 01:52:55,405 - gurobipy.gurobipy - INFO -      0     0 1517.62612    0 3678 -9850.0000 1517.62612   115%     -   76s
+2025-03-15 01:52:55,503 - gurobipy.gurobipy - INFO -      0     0 1517.62601    0 3797 -9850.0000 1517.62601   115%     -   76s
+2025-03-15 01:53:32,611 - milp_test - INFO - ================================================================================
+2025-03-15 01:53:32,612 - milp_test - INFO - TESTING MILP OPTIMIZER (NO WARM START)
+2025-03-15 01:53:32,612 - milp_test - INFO - ================================================================================
+2025-03-15 01:53:32,613 - src.data.loader - INFO - Data loader initialized successfully
+2025-03-15 01:53:32,613 - src.data.loader - INFO - Starting data load process...
+2025-03-15 01:53:32,613 - src.data.loader - INFO - Loading base data files...
+2025-03-15 01:53:32,616 - src.data.loader - INFO - Students loaded: 100 records
+2025-03-15 01:53:32,619 - src.data.loader - INFO - Teachers loaded: 16 records
+2025-03-15 01:53:32,621 - src.data.loader - INFO - Sections loaded: 46 records
+2025-03-15 01:53:32,622 - src.data.loader - INFO - Periods loaded: 8 records
+2025-03-15 01:53:32,623 - src.data.loader - INFO - Loading relationship data...
+2025-03-15 01:53:32,625 - src.data.loader - INFO - Student preferences: 100 records
+2025-03-15 01:53:32,627 - src.data.loader - INFO - Teacher unavailability: 1 records
+2025-03-15 01:53:32,627 - src.data.loader - INFO - Validating data relationships...
+2025-03-15 01:53:32,636 - src.data.loader - INFO - All relationships are valid
+2025-03-15 01:53:32,637 - src.data.loader - INFO - Data loaded and validated successfully
+2025-03-15 01:53:32,669 - milp_test - INFO - Creating MILP optimizer with 100 students, 16 teachers, 46 sections, 8 periods
+2025-03-15 01:53:32,670 - milp_test - INFO - Special sections: [('S001', 'Medical Career'), ('S002', 'Medical Career'), ('S003', 'Heroes Teach'), ('S004', 'Heroes Teach')]
+2025-03-15 01:53:32,670 - src.algorithms.milp - INFO - Medical Career restricted to periods: ['R1', 'G1']
+2025-03-15 01:53:32,670 - src.algorithms.milp - INFO - Heroes Teach restricted to periods: ['R2', 'G2']
+2025-03-15 01:53:32,671 - src.algorithms.milp - INFO - Initialized MILP optimizer with: 100 students, 16 teachers, 46 sections, 8 periods, no warm start
+2025-03-15 01:53:32,671 - milp_test - INFO - Course period restrictions:
+2025-03-15 01:53:32,671 - milp_test - INFO -   Medical Career: ['R1', 'G1']
+2025-03-15 01:53:32,671 - milp_test - INFO -   Heroes Teach: ['R2', 'G2']
+2025-03-15 01:53:32,672 - milp_test - INFO - Starting MILP optimization...
+2025-03-15 01:53:32,672 - src.algorithms.milp - INFO - Starting MILP optimization...
+2025-03-15 01:53:32,672 - src.algorithms.milp - INFO - Building MILP model...
+2025-03-15 01:53:32,673 - gurobipy.gurobipy - INFO - Set parameter WLSAccessID
+2025-03-15 01:53:32,674 - gurobipy.gurobipy - INFO - Set parameter WLSSecret
+2025-03-15 01:53:32,675 - gurobipy.gurobipy - INFO - Set parameter LicenseID to value 2628134
+2025-03-15 01:53:32,988 - gurobipy.gurobipy - INFO - Academic license 2628134 - for non-commercial use only - registered to bs___@uw.edu
+2025-03-15 01:53:32,994 - gurobipy.gurobipy - INFO - Set parameter TimeLimit to value 3600
+2025-03-15 01:53:32,995 - gurobipy.gurobipy - INFO - Set parameter Presolve to value 1
+2025-03-15 01:53:32,995 - gurobipy.gurobipy - INFO - Set parameter Method to value 1
+2025-03-15 01:53:32,996 - gurobipy.gurobipy - INFO - Set parameter MIPFocus to value 1
+2025-03-15 01:53:32,996 - gurobipy.gurobipy - INFO - Set parameter MIPGap to value 0.1
+2025-03-15 01:53:32,997 - gurobipy.gurobipy - INFO - Set parameter MemLimit to value 14336
+2025-03-15 01:53:32,998 - gurobipy.gurobipy - INFO - Set parameter NodefileStart to value 0.95
+2025-03-15 01:53:32,999 - gurobipy.gurobipy - INFO - Set parameter NodefileDir to value "/tmp/gurobi_nodefiles"
+2025-03-15 01:53:32,999 - src.algorithms.milp - INFO - Added constraint: special section S001 (Medical Career) must be assigned to one of ['R1', 'G1']
+2025-03-15 01:53:33,000 - src.algorithms.milp - INFO - Added constraint: special section S002 (Medical Career) must be assigned to one of ['R1', 'G1']
+2025-03-15 01:53:33,001 - src.algorithms.milp - INFO - Added constraint: special section S003 (Heroes Teach) must be assigned to one of ['R2', 'G2']
+2025-03-15 01:53:33,001 - src.algorithms.milp - INFO - Added constraint: special section S004 (Heroes Teach) must be assigned to one of ['R2', 'G2']
+2025-03-15 01:53:33,819 - src.algorithms.milp - INFO - Model built in 1.15 seconds
+2025-03-15 01:53:33,820 - src.algorithms.milp - INFO - Model has 0 variables and 0 constraints
+2025-03-15 01:53:33,849 - gurobipy.gurobipy - INFO - Gurobi Optimizer version 10.0.0 build v10.0.0rc2 (linux64)
+2025-03-15 01:53:33,849 - gurobipy.gurobipy - INFO - 
+2025-03-15 01:53:33,850 - gurobipy.gurobipy - INFO - CPU model: Intel(R) Xeon(R) Platinum 8375C CPU @ 2.90GHz, instruction set [SSE2|AVX|AVX2|AVX512]
+2025-03-15 01:53:33,851 - gurobipy.gurobipy - INFO - Thread count: 1 physical cores, 2 logical processors, using up to 2 threads
+2025-03-15 01:53:33,851 - gurobipy.gurobipy - INFO - 
+2025-03-15 01:53:33,852 - gurobipy.gurobipy - INFO - Academic license 2628134 - for non-commercial use only - registered to bs___@uw.edu
+2025-03-15 01:53:33,853 - gurobipy.gurobipy - INFO - Optimize a model with 36098 rows, 13440 columns and 104804 nonzeros
+2025-03-15 01:53:33,856 - gurobipy.gurobipy - INFO - Model fingerprint: 0x722a1537
+2025-03-15 01:53:33,857 - gurobipy.gurobipy - INFO - Variable types: 0 continuous, 13440 integer (13394 binary)
+2025-03-15 01:53:33,857 - gurobipy.gurobipy - INFO - Coefficient statistics:
+2025-03-15 01:53:33,858 - gurobipy.gurobipy - INFO -   Matrix range     [1e+00, 1e+00]
+2025-03-15 01:53:33,858 - gurobipy.gurobipy - INFO -   Objective range  [1e+00, 1e+03]
+2025-03-15 01:53:33,859 - gurobipy.gurobipy - INFO -   Bounds range     [1e+00, 1e+00]
+2025-03-15 01:53:33,859 - gurobipy.gurobipy - INFO -   RHS range        [1e+00, 4e+01]
+2025-03-15 01:53:33,866 - gurobipy.gurobipy - INFO - Found heuristic solution: objective -599540.0000
+2025-03-15 01:53:34,153 - gurobipy.gurobipy - INFO - Presolve removed 110 rows and 38 columns
+2025-03-15 01:53:34,154 - gurobipy.gurobipy - INFO - Presolve time: 0.29s
+2025-03-15 01:53:34,155 - gurobipy.gurobipy - INFO - Presolved: 35988 rows, 13402 columns, 103746 nonzeros
+2025-03-15 01:53:34,187 - gurobipy.gurobipy - INFO - Variable types: 0 continuous, 13402 integer (13390 binary)
+2025-03-15 01:53:34,193 - gurobipy.gurobipy - INFO - Found heuristic solution: objective -351192.0000
+2025-03-15 01:53:38,861 - gurobipy.gurobipy - INFO - 
+2025-03-15 01:53:38,862 - gurobipy.gurobipy - INFO - Root simplex log...
+2025-03-15 01:53:38,862 - gurobipy.gurobipy - INFO - 
+2025-03-15 01:53:38,862 - gurobipy.gurobipy - INFO - Iteration    Objective       Primal Inf.    Dual Inf.      Time
+2025-03-15 01:53:38,863 - gurobipy.gurobipy - INFO -    16108    1.5264994e+03   2.222650e+03   0.000000e+00      5s
+2025-03-15 01:53:41,061 - gurobipy.gurobipy - INFO -    19462    1.5265000e+03   0.000000e+00   0.000000e+00      7s
+2025-03-15 01:53:41,062 - gurobipy.gurobipy - INFO - 
+2025-03-15 01:53:41,063 - gurobipy.gurobipy - INFO - Root relaxation: objective 1.526500e+03, 19462 iterations, 6.86 seconds (9.60 work units)
+2025-03-15 01:53:44,978 - gurobipy.gurobipy - INFO - Total elapsed time = 11.13s
+2025-03-15 01:53:50,206 - gurobipy.gurobipy - INFO - 
+2025-03-15 01:53:50,206 - gurobipy.gurobipy - INFO -     Nodes    |    Current Node    |     Objective Bounds      |     Work
+2025-03-15 01:53:50,207 - gurobipy.gurobipy - INFO -  Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+2025-03-15 01:53:50,207 - gurobipy.gurobipy - INFO - 
+2025-03-15 01:53:50,207 - gurobipy.gurobipy - INFO -      0     0 1526.50000    0 1028 -351192.00 1526.50000   100%     -   16s
+2025-03-15 01:53:50,224 - gurobipy.gurobipy - INFO - H    0     0                    -88765.00000 1526.50000   102%     -   16s
+2025-03-15 01:53:50,291 - gurobipy.gurobipy - INFO - H    0     0                    -64765.00000 1526.50000   102%     -   16s
+2025-03-15 01:54:11,269 - gurobipy.gurobipy - INFO -      0     0 1525.00183    0 2752 -64765.000 1525.00183   102%     -   37s
+2025-03-15 01:54:11,892 - gurobipy.gurobipy - INFO - H    0     0                    -49872.00000 1525.00183   103%     -   38s
+2025-03-15 01:54:12,342 - gurobipy.gurobipy - INFO - H    0     0                    -39744.00000 1525.00183   104%     -   38s
+2025-03-15 01:54:12,390 - gurobipy.gurobipy - INFO - H    0     0                    -32740.00000 1525.00183   105%     -   38s
+2025-03-15 01:54:13,750 - gurobipy.gurobipy - INFO -      0     0 1525.00183    0 3055 -32740.000 1525.00183   105%     -   39s
+2025-03-15 01:54:31,366 - gurobipy.gurobipy - INFO -      0     0 1505.19077    0 6853 -9850.0000 1505.19077   115%     -  172s
+2025-03-15 01:54:31,473 - gurobipy.gurobipy - INFO - H    0     0                    -7857.000000 1505.19077   119%     -  172s
+2025-03-15 01:54:31,547 - gurobipy.gurobipy - INFO - H    0     0                    -5791.000000 1505.19077   126%     -  172s
+2025-03-15 01:54:38,195 - gurobipy.gurobipy - INFO -      0     0          -    0      -32740.000 1525.00183   105%     -   64s
+2025-03-15 01:54:38,196 - gurobipy.gurobipy - INFO - 
+2025-03-15 01:54:38,196 - gurobipy.gurobipy - INFO - Cutting planes:
+2025-03-15 01:54:38,197 - gurobipy.gurobipy - INFO -   Gomory: 4
+2025-03-15 01:54:38,197 - gurobipy.gurobipy - INFO -   Implied bound: 577
+2025-03-15 01:54:38,197 - gurobipy.gurobipy - INFO -   MIR: 7
+2025-03-15 01:54:38,197 - gurobipy.gurobipy - INFO -   Zero half: 54
+2025-03-15 01:54:38,198 - gurobipy.gurobipy - INFO -   RLT: 1082
+2025-03-15 01:54:38,198 - gurobipy.gurobipy - INFO -   BQP: 469
+2025-03-15 01:54:38,200 - gurobipy.gurobipy - INFO - 
+2025-03-15 01:54:38,201 - gurobipy.gurobipy - INFO - Explored 1 nodes (84331 simplex iterations) in 64.35 seconds (89.18 work units)
+2025-03-15 01:54:38,201 - gurobipy.gurobipy - INFO - Thread count was 2 (of 2 available processors)
+2025-03-15 01:54:38,201 - gurobipy.gurobipy - INFO - 
+2025-03-15 01:54:38,202 - gurobipy.gurobipy - INFO - Solution count 7: -32740 -39744 -49872 ... -599540
+2025-03-15 01:54:38,202 - gurobipy.gurobipy - INFO - 
+2025-03-15 01:54:38,202 - gurobipy.gurobipy - INFO - Solve interrupted
+2025-03-15 01:54:38,203 - gurobipy.gurobipy - INFO - Best objective -3.274000000000e+04, best bound 1.525000000000e+03, gap 104.6579%
+2025-03-15 01:54:38,204 - src.algorithms.milp - INFO - Optimization complete with status: 11 (UNKNOWN)
+2025-03-15 01:54:38,204 - milp_test - ERROR - MILP optimization failed: __init__() missing 1 required positional argument: 'sections'
+Traceback (most recent call last):
+  File "/app/test_milp_only.py", line 94, in test_clean_milp
+    schedule = milp_optimizer.optimize()
+  File "/app/scheduling-platform/optimizer/src/algorithms/milp.py", line 532, in optimize
+    schedule = Schedule()
+TypeError: __init__() missing 1 required positional argument: 'sections'
+2025-03-15 01:54:38,241 - milp_test - INFO - Test completed!
+2025-03-15 01:55:17,770 - gurobipy.gurobipy - INFO -      0     0 1493.68584    0 6746 -5791.0000 1493.68584   126%     -  219s

@@ -1,0 +1,26 @@
+2025-03-15 00:56:26,372 - INFO - Data loader initialized successfully
+2025-03-15 00:56:26,373 - INFO - Starting data load process...
+2025-03-15 00:56:26,374 - INFO - Loading base data files...
+2025-03-15 00:56:26,377 - INFO - Students loaded: 100 records
+2025-03-15 00:56:26,382 - INFO - Teachers loaded: 16 records
+2025-03-15 00:56:26,389 - INFO - Sections loaded: 51 records
+2025-03-15 00:56:26,394 - INFO - Periods loaded: 8 records
+2025-03-15 00:56:26,397 - INFO - Loading relationship data...
+2025-03-15 00:56:26,401 - INFO - Student preferences: 100 records
+2025-03-15 00:56:26,406 - INFO - Teacher unavailability: 4 records
+2025-03-15 00:56:26,407 - INFO - Validating data relationships...
+2025-03-15 00:56:26,432 - INFO - All relationships are valid
+2025-03-15 00:56:26,432 - INFO - Data loaded and validated successfully
+2025-03-15 00:56:28,556 - INFO - Data loader initialized successfully
+2025-03-15 00:56:28,557 - INFO - Starting data load process...
+2025-03-15 00:56:28,557 - INFO - Loading base data files...
+2025-03-15 00:56:28,559 - INFO - Students loaded: 100 records
+2025-03-15 00:56:28,560 - INFO - Teachers loaded: 16 records
+2025-03-15 00:56:28,572 - INFO - Sections loaded: 53 records
+2025-03-15 00:56:28,574 - INFO - Periods loaded: 8 records
+2025-03-15 00:56:28,574 - INFO - Loading relationship data...
+2025-03-15 00:56:28,576 - INFO - Student preferences: 100 records
+2025-03-15 00:56:28,577 - INFO - Teacher unavailability: 4 records
+2025-03-15 00:56:28,577 - INFO - Validating data relationships...
+2025-03-15 00:56:28,585 - INFO - All relationships are valid
+2025-03-15 00:56:28,599 - INFO - Data loaded and validated successfully

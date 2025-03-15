@@ -18,6 +18,7 @@ import argparse
 import logging
 import pandas as pd
 import requests
+import gurobipy as gp
 from pathlib import Path
 from typing import Dict, List, Any, Tuple, Optional
 
@@ -35,8 +36,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Claude API temporary key (will be replaced with proper auth later)
-CLAUDE_API_KEY = "ba446ea2-f2f6-4614-8e8f-aa378d1404b5"
+# Claude API key
+CLAUDE_API_KEY = "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"
 CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 
 class OptimizationPipeline:
@@ -105,68 +106,244 @@ class OptimizationPipeline:
             iteration_dir = self.iterations_dir / f"iteration_{self.iteration + 1}"
             iteration_dir.mkdir(exist_ok=True)
             
-            # Run greedy optimization
-            greedy_start = time.time()
-            greedy_schedule, greedy_optimizer = self._run_greedy_optimization(current_input_dir, iteration_dir)
-            self.metrics['greedy_time'] += time.time() - greedy_start
+            try:
+                # Run greedy optimization
+                greedy_start = time.time()
+                greedy_schedule, greedy_optimizer = self._run_greedy_optimization(current_input_dir, iteration_dir)
+                self.metrics['greedy_time'] += time.time() - greedy_start
+                
+                # Run MILP optimization using greedy as warm start
+                milp_start = time.time()
+                milp_schedule = self._run_milp_optimization(
+                    greedy_optimizer.students,
+                    greedy_optimizer.teachers,
+                    greedy_optimizer.sections,
+                    greedy_optimizer.periods,
+                    greedy_optimizer.student_preferences,
+                    greedy_schedule,
+                    iteration_dir
+                )
+                self.metrics['milp_time'] += time.time() - milp_start
+                
+                # Check utilization and identify underutilized sections
+                utilization_df = DataConverter.generate_utilization_report(milp_schedule)
+                underutilized_sections = utilization_df[
+                    utilization_df['Utilization'] < self.utilization_threshold
+                ]
+                
+                # Log details about underutilized sections
+                logger.info(f"Found {len(underutilized_sections)} sections below {self.utilization_threshold*100}% utilization:")
+                for _, row in underutilized_sections.iterrows():
+                    logger.info(f"  - Section {row['Section ID']} ({row['Course ID']}): {row['Utilization']:.2%} utilization ({row['Enrollment']}/{row['Capacity']} students)")
+                
+                # Record metrics for this iteration
+                avg_utilization = utilization_df['Utilization'].mean()
+                if self.iteration == 0:
+                    self.metrics['initial_utilization'] = avg_utilization
+                
+                logger.info(f"Iteration {self.iteration + 1} - Average utilization: {avg_utilization:.2f}")
+                logger.info(f"Found {len(underutilized_sections)} underutilized sections")
+                
+                # If no underutilized sections or reached max iterations, we're done
+                if len(underutilized_sections) == 0 or self.iteration == self.max_iterations - 1:
+                    overall_result = {
+                        'schedule': milp_schedule,
+                        'utilization': utilization_df,
+                        'output_dir': str(iteration_dir)
+                    }
+                    self.metrics['final_utilization'] = avg_utilization
+                    break
+                
+                # If this is the first iteration and there are a lot of underutilized sections,
+                # we might want to skip running Claude agent and just use the first iteration result
+                if self.iteration == 0 and len(underutilized_sections) > 10:
+                    logger.warning(f"Found {len(underutilized_sections)} underutilized sections in first iteration")
+                    logger.warning("This suggests fundamental data issues that section adjustments may not fix")
+                    logger.info("Continuing with section adjustments, but consider reviewing input data")
+                
+                # Run Claude agent to adjust underutilized sections - safer version that won't create problematic sections
+                agent_start = time.time()
+                new_input_files = self._run_claude_agent(
+                    milp_schedule, 
+                    underutilized_sections, 
+                    current_input_dir,
+                    iteration_dir
+                )
+                self.metrics['agent_time'] += time.time() - agent_start
+                
+                # Check if any actions were actually performed
+                actions_performed = self._check_if_changes_made(current_input_dir, new_input_files)
+                if not actions_performed:
+                    logger.info("No changes were made by the Claude agent - using current result as final")
+                    overall_result = {
+                        'schedule': milp_schedule,
+                        'utilization': utilization_df,
+                        'output_dir': str(iteration_dir)
+                    }
+                    self.metrics['final_utilization'] = avg_utilization
+                    break
+                
+                # Update metrics
+                self.metrics['sections_adjusted'] += len(underutilized_sections)
+                
+                # Use the new input files for the next iteration
+                current_input_dir = new_input_files
+                
+            except Exception as e:
+                logger.error(f"Error in iteration {self.iteration + 1}: {str(e)}")
+                logger.info("Using results from last successful iteration")
+                
+                if self.iteration == 0:
+                    # If we fail on the first iteration, we don't have any results yet
+                    raise RuntimeError(f"Failed on first iteration: {str(e)}")
+                else:
+                    # Use the results from the previous iteration
+                    break
             
-            # Run MILP optimization using greedy as warm start
-            milp_start = time.time()
-            milp_schedule = self._run_milp_optimization(
-                greedy_optimizer.students,
-                greedy_optimizer.teachers,
-                greedy_optimizer.sections,
-                greedy_optimizer.periods,
-                greedy_optimizer.student_preferences,
-                greedy_schedule,
-                iteration_dir
-            )
-            self.metrics['milp_time'] += time.time() - milp_start
+            # Increment iteration counter
+            self.iteration += 1
+            self.metrics['iterations'] = self.iteration + 1
             
-            # Check utilization and identify underutilized sections
-            utilization_df = DataConverter.generate_utilization_report(milp_schedule)
-            underutilized_sections = utilization_df[
-                utilization_df['Utilization'] < self.utilization_threshold
-            ]
+    def _check_if_changes_made(self, original_dir: Path, new_dir: Path) -> bool:
+        """
+        Check if any changes were made between the original and new input files.
+        
+        Args:
+            original_dir: Path to original input directory
+            new_dir: Path to new input directory
             
-            # Log details about underutilized sections
-            logger.info(f"Found {len(underutilized_sections)} sections below {self.utilization_threshold*100}% utilization:")
-            for _, row in underutilized_sections.iterrows():
-                logger.info(f"  - Section {row['Section ID']} ({row['Course ID']}): {row['Utilization']:.2%} utilization ({row['Enrollment']}/{row['Capacity']} students)")
+        Returns:
+            True if changes were made, False otherwise
+        """
+        original_sections = pd.read_csv(original_dir / "Sections_Information.csv")
+        new_sections = pd.read_csv(new_dir / "Sections_Information.csv")
+        
+        # Simple check - did the number of sections change?
+        if len(original_sections) != len(new_sections):
+            return True
             
-            # Record metrics for this iteration
-            avg_utilization = utilization_df['Utilization'].mean()
-            if self.iteration == 0:
-                self.metrics['initial_utilization'] = avg_utilization
+        # Check if the section IDs changed
+        original_ids = set(original_sections["Section ID"])
+        new_ids = set(new_sections["Section ID"])
+        
+        if original_ids != new_ids:
+            return True
             
-            logger.info(f"Iteration {self.iteration + 1} - Average utilization: {avg_utilization:.2f}")
-            logger.info(f"Found {len(underutilized_sections)} underutilized sections")
+        # No significant changes detected
+        logger.info("No significant changes detected between iterations")
+        return False
+    
+    def run(self) -> Dict[str, Any]:
+        """
+        Run the complete optimization pipeline.
+        
+        Returns:
+            Dictionary with optimization results and metrics
+        """
+        start_time = time.time()
+        logger.info("Starting optimization pipeline")
+        
+        # Initial input files are in the input directory
+        current_input_dir = self.input_dir
+        
+        # Continue optimizing until we reach the target utilization or max iterations
+        self.iteration = 0
+        overall_result = None
+        
+        # Main optimization loop
+        while self.iteration < self.max_iterations:
+            logger.info(f"Starting iteration {self.iteration + 1}/{self.max_iterations}")
             
-            # If no underutilized sections or reached max iterations, we're done
-            if len(underutilized_sections) == 0 or self.iteration == self.max_iterations - 1:
-                overall_result = {
+            # Create iteration output directory
+            iteration_dir = self.iterations_dir / f"iteration_{self.iteration + 1}"
+            iteration_dir.mkdir(exist_ok=True)
+            
+            try:
+                # Run greedy optimization
+                greedy_start = time.time()
+                greedy_schedule, greedy_optimizer = self._run_greedy_optimization(current_input_dir, iteration_dir)
+                self.metrics['greedy_time'] += time.time() - greedy_start
+                
+                # Run MILP optimization using greedy as warm start
+                milp_start = time.time()
+                milp_schedule = self._run_milp_optimization(
+                    greedy_optimizer.students,
+                    greedy_optimizer.teachers,
+                    greedy_optimizer.sections,
+                    greedy_optimizer.periods,
+                    greedy_optimizer.student_preferences,
+                    greedy_schedule,
+                    iteration_dir
+                )
+                self.metrics['milp_time'] += time.time() - milp_start
+                
+                # Store the last successful iteration data
+                last_success = {
                     'schedule': milp_schedule,
-                    'utilization': utilization_df,
+                    'utilization': DataConverter.generate_utilization_report(milp_schedule),
                     'output_dir': str(iteration_dir)
                 }
-                self.metrics['final_utilization'] = avg_utilization
-                break
-            
-            # Run Claude agent to adjust underutilized sections
-            agent_start = time.time()
-            new_input_files = self._run_claude_agent(
-                milp_schedule, 
-                underutilized_sections, 
-                current_input_dir,
-                iteration_dir
-            )
-            self.metrics['agent_time'] += time.time() - agent_start
-            
-            # Update metrics
-            self.metrics['sections_adjusted'] += len(underutilized_sections)
-            
-            # Use the new input files for the next iteration
-            current_input_dir = new_input_files
+                
+                # Check utilization and identify underutilized sections
+                utilization_df = last_success['utilization']
+                underutilized_sections = utilization_df[
+                    utilization_df['Utilization'] < self.utilization_threshold
+                ]
+                
+                # Log details about underutilized sections
+                logger.info(f"Found {len(underutilized_sections)} sections below {self.utilization_threshold*100}% utilization:")
+                for _, row in underutilized_sections.iterrows():
+                    logger.info(f"  - Section {row['Section ID']} ({row['Course ID']}): {row['Utilization']:.2%} utilization ({row['Enrollment']}/{row['Capacity']} students)")
+                
+                # Record metrics for this iteration
+                avg_utilization = utilization_df['Utilization'].mean()
+                if self.iteration == 0:
+                    self.metrics['initial_utilization'] = avg_utilization
+                
+                logger.info(f"Iteration {self.iteration + 1} - Average utilization: {avg_utilization:.2f}")
+                logger.info(f"Found {len(underutilized_sections)} underutilized sections")
+                
+                # If no underutilized sections or reached max iterations, we're done
+                if len(underutilized_sections) == 0 or self.iteration == self.max_iterations - 1:
+                    overall_result = last_success
+                    self.metrics['final_utilization'] = avg_utilization
+                    break
+                
+                # Run Claude agent to adjust underutilized sections
+                agent_start = time.time()
+                new_input_files = self._run_claude_agent(
+                    milp_schedule, 
+                    underutilized_sections, 
+                    current_input_dir,
+                    iteration_dir
+                )
+                self.metrics['agent_time'] += time.time() - agent_start
+                
+                # Check if any actions were actually performed
+                actions_performed = self._check_if_changes_made(current_input_dir, new_input_files)
+                if not actions_performed:
+                    logger.info("No changes were made by the Claude agent - using current result as final")
+                    overall_result = last_success
+                    self.metrics['final_utilization'] = avg_utilization
+                    break
+                
+                # Update metrics
+                self.metrics['sections_adjusted'] += len(underutilized_sections)
+                
+                # Use the new input files for the next iteration
+                current_input_dir = new_input_files
+                
+            except Exception as e:
+                logger.error(f"Error in iteration {self.iteration + 1}: {str(e)}")
+                logger.info("Using results from last successful iteration")
+                
+                if self.iteration == 0:
+                    # If we fail on the first iteration, we don't have any results yet
+                    raise RuntimeError(f"Failed on first iteration: {str(e)}")
+                else:
+                    # Use the results from the previous iteration
+                    overall_result = last_success
+                    break
             
             # Increment iteration counter
             self.iteration += 1
@@ -176,7 +353,7 @@ class OptimizationPipeline:
         final_output_dir = self.output_dir / "final"
         final_output_dir.mkdir(exist_ok=True)
         
-        # Copy final files
+        # Copy final files if we have them
         if overall_result:
             self._save_final_results(overall_result['schedule'], overall_result['utilization'], final_output_dir)
         
@@ -266,22 +443,38 @@ class OptimizationPipeline:
         logger.info("Running MILP optimization with warm start from greedy algorithm")
         
         try:
-            # Create the MILP optimizer
+            # Create the MILP optimizer with warm start from greedy
             milp_optimizer = MILPOptimizer(
                 students=students,
                 teachers=teachers,
                 sections=sections,
                 periods=periods,
                 student_preferences=student_preferences,
+                warm_start=warm_start,  # Use greedy solution as warm start
                 time_limit_seconds=900  # 15 minutes max
             )
             
             # Run MILP optimization
             schedule = milp_optimizer.optimize()
-        except Exception as e:
-            logger.warning(f"MILP optimization failed: {str(e)}")
+            
+            # Verify we got a valid solution (should have at least one scheduled section)
+            scheduled_sections = [s for s in schedule.sections.values() if s.is_scheduled]
+            if not scheduled_sections:
+                logger.warning("MILP optimization returned no scheduled sections")
+                logger.info("Falling back to greedy solution")
+                schedule = warm_start
+            else:
+                logger.info(f"MILP optimization successfully scheduled {len(scheduled_sections)} sections")
+                
+        except gp.GurobiError as e:
+            logger.warning(f"MILP optimization failed with Gurobi error: {str(e)}")
             logger.info("Falling back to greedy solution")
-            # If MILP fails (e.g., due to license issues), use the greedy schedule
+            schedule = warm_start
+        except Exception as e:
+            logger.warning(f"MILP optimization failed with unexpected error: {str(e)}")
+            import traceback
+            logger.debug(f"Stack trace: {traceback.format_exc()}")
+            logger.info("Falling back to greedy solution")
             schedule = warm_start
         
         # Save results (either from MILP or greedy if MILP failed)
@@ -435,8 +628,9 @@ class OptimizationPipeline:
         """
         logger.info("Calling Claude API")
         
+        # Try to make a real call to the Claude API
         try:
-            # Real API call to Claude
+            # Configure API request
             headers = {
                 "x-api-key": CLAUDE_API_KEY,
                 "Content-Type": "application/json",
@@ -444,56 +638,192 @@ class OptimizationPipeline:
             }
             
             payload = {
-                "model": "claude-3-opus-20240229",
+                "model": "claude-3-sonnet-20240229",  # Use Sonnet for better cost efficiency
                 "max_tokens": 2000,
                 "messages": [
                     {"role": "user", "content": prompt}
                 ]
             }
             
+            # Make the API call
             try:
-                # Try to import requests
                 import requests
                 response = requests.post(CLAUDE_API_URL, json=payload, headers=headers)
                 
                 if response.status_code == 200:
                     response_data = response.json()
-                    return response_data["content"][0]["text"]
+                    claude_response = response_data["content"][0]["text"]
+                    logger.info("Successfully received response from Claude API")
+                    return claude_response
                 else:
                     logger.error(f"Claude API error: {response.status_code} - {response.text}")
-            except (ImportError, Exception) as e:
-                logger.warning(f"Could not call real Claude API: {str(e)}")
-                
-            # If API call fails or requests not available, fall back to simulated response
-            logger.info("Using simulated Claude response")
-            
+            except Exception as e:
+                logger.warning(f"Error making Claude API request: {str(e)}")
         except Exception as e:
-            logger.warning(f"Error calling Claude API: {str(e)}")
-            logger.info("Using simulated Claude response")
+            logger.warning(f"Error preparing Claude API call: {str(e)}")
         
-        # For testing purposes - simulated Claude response with section IDs from our dataset
-        # We use S001-S003 which we know will exist in most datasets
-        simulated_response = """
+        # If we get here, the API call failed - use fallback logic
+        logger.info("Using fallback section adjustment logic")
+        
+        # Get the actual underutilized sections from the data
+        underutilized_section_ids = underutilized_sections["Section ID"].tolist()
+        if not underutilized_section_ids:
+            logger.warning("No underutilized sections found to adjust")
+            return "[]"  # Return empty JSON array if no sections to adjust
+            
+        # Create intelligent fallback logic based on actual underutilized sections
+        actions = []
+        
+        # First, read in all the CSV data to make intelligent decisions
+        try:
+            sections_df = pd.read_csv(current_input_dir / "Sections_Information.csv")
+            teachers_df = pd.read_csv(current_input_dir / "Teacher_Info.csv")
+            
+            # Count how many sections each teacher is assigned to
+            teacher_section_counts = {}
+            for _, row in sections_df.iterrows():
+                teacher_id = row["Teacher Assigned"]
+                teacher_section_counts[teacher_id] = teacher_section_counts.get(teacher_id, 0) + 1
+                
+            # Map teachers to the courses they teach
+            teacher_courses = {}
+            for _, row in sections_df.iterrows():
+                teacher_id = row["Teacher Assigned"]
+                course_id = row["Course ID"]
+                if teacher_id not in teacher_courses:
+                    teacher_courses[teacher_id] = set()
+                teacher_courses[teacher_id].add(course_id)
+                
+            # Find sections that need merging (similar sections with low enrollment)
+            mergeable_sections = {}
+            for course_id in sections_df["Course ID"].unique():
+                course_sections = sections_df[sections_df["Course ID"] == course_id]
+                if len(course_sections) >= 2:  # Need at least 2 sections to merge
+                    # Find underutilized sections of this course
+                    course_low_util = [
+                        section_id for section_id in underutilized_section_ids 
+                        if section_id in course_sections["Section ID"].values
+                    ]
+                    if len(course_low_util) >= 2:
+                        mergeable_sections[course_id] = course_low_util
+                        
+            # For each underutilized section, determine the best action
+            for section_id in underutilized_section_ids[:3]:  # Limit to first 3 to avoid too many changes
+                section_row = underutilized_sections[underutilized_sections["Section ID"] == section_id].iloc[0]
+                section_data = sections_df[sections_df["Section ID"] == section_id].iloc[0]
+                utilization = section_row["Utilization"]
+                course_id = section_row["Course ID"]
+                enrollment = section_row["Enrollment"]
+                capacity = section_row["Capacity"]
+                teacher_id = section_data["Teacher Assigned"]
+                department = section_data["Department"]
+                
+                # Check if current size is outside the optimal range
+                if capacity > 35:
+                    # Section is too large, should be split
+                    # Find another teacher who teaches this course or in this department
+                    potential_teachers = []
+                    for tid, courses in teacher_courses.items():
+                        if tid != teacher_id and (
+                            course_id in courses or  # Already teaches this course
+                            (tid in teachers_df["Teacher ID"].values and  # In same department
+                             teachers_df[teachers_df["Teacher ID"] == tid]["Department"].iloc[0] == department)
+                        ):
+                            # Check if this teacher has 5 or fewer sections
+                            if teacher_section_counts.get(tid, 0) <= 5:
+                                potential_teachers.append(tid)
+                                
+                    if potential_teachers:
+                        # Split into two sections of reasonable size
+                        actions.append({
+                            "section_id": section_id,
+                            "action": "SPLIT",
+                            "reason": f"Section is too large ({capacity} seats). Splitting to optimize class size."
+                        })
+                        continue
+                
+                # Very low enrollment and utilization
+                if enrollment < 15 and utilization < 0.4:
+                    # Check if we can merge with another section
+                    if course_id in mergeable_sections and len(mergeable_sections[course_id]) >= 2:
+                        merge_candidates = [s for s in mergeable_sections[course_id] if s != section_id]
+                        if merge_candidates:
+                            merge_with = merge_candidates[0]
+                            actions.append({
+                                "section_id": section_id,
+                                "action": "MERGE",
+                                "merge_with": merge_with,
+                                "reason": f"Both sections have low enrollment and can be combined to optimize resources."
+                            })
+                            # Remove the used section from candidates
+                            mergeable_sections[course_id].remove(merge_with)
+                            continue
+                    
+                    # If not mergeable and very low enrollment, remove it
+                    # But protect special courses unless extremely low enrollment
+                    if course_id not in ["Medical Career", "Heroes Teach"] or enrollment < 5:
+                        actions.append({
+                            "section_id": section_id,
+                            "action": "REMOVE",
+                            "reason": f"Section has very low enrollment ({enrollment}) and utilization ({utilization:.1%})."
+                        })
+                        continue
+                
+                # For sections with moderate demand but still under threshold
+                if 0.5 <= utilization < 0.75 and enrollment >= 15:
+                    # Check if there's high overall demand for this course
+                    course_sections = sections_df[sections_df["Course ID"] == course_id]
+                    course_section_ids = course_sections["Section ID"].tolist()
+                    
+                    # Check if other sections of this course are highly utilized
+                    other_sections_highly_utilized = False
+                    for other_id in course_section_ids:
+                        if other_id != section_id and other_id in utilization_df["Section ID"].values:
+                            other_util = utilization_df[utilization_df["Section ID"] == other_id]["Utilization"].iloc[0]
+                            if other_util > 0.9:  # Other section is nearly full
+                                other_sections_highly_utilized = True
+                                break
+                                
+                    if other_sections_highly_utilized:
+                        # Find a teacher who can teach another section
+                        potential_teachers = []
+                        for tid, courses in teacher_courses.items():
+                            if course_id in courses and teacher_section_counts.get(tid, 0) <= 5:
+                                potential_teachers.append(tid)
+                                
+                        if potential_teachers:
+                            # Add a new section to meet demand
+                            actions.append({
+                                "section_id": section_id,
+                                "action": "ADD",
+                                "reason": f"High demand for {course_id} with other sections nearly full. Adding a new section."
+                            })
+                            continue
+                            
+                # If we get here, no specific action needed for this section
+                logger.info(f"No specific action needed for section {section_id} with utilization {utilization:.1%}")
+                
+        except Exception as e:
+            logger.error(f"Error analyzing sections for adjustment: {str(e)}")
+            # Fallback to basic removal of very underutilized sections
+            for section_id in underutilized_section_ids[:2]:
+                section_row = underutilized_sections[underutilized_sections["Section ID"] == section_id].iloc[0]
+                utilization = section_row["Utilization"]
+                if utilization < 0.3:
+                    actions.append({
+                        "section_id": section_id,
+                        "action": "REMOVE",
+                        "reason": f"Section has very low utilization ({utilization:.1%})."
+                    })
+            
+        # Convert actions to JSON string
+        simulated_response = f"""
         I've analyzed the underutilized sections and here are my recommendations:
         
-        [
-          {
-            "section_id": "S002",
-            "action": "SPLIT",
-            "reason": "This is a popular course with high demand. Creating another section would improve student access."
-          },
-          {
-            "section_id": "S003",
-            "action": "ADD",
-            "reason": "Based on student preferences, there's demand for another section of this course."
-          },
-          {
-            "section_id": "S001",
-            "action": "REMOVE",
-            "reason": "This section has extremely low enrollment and students can be accommodated in other sections."
-          }
-        ]
+        {json.dumps(actions, indent=2)}
         """
+        
+        logger.info(f"Generated fallback response with {len(actions)} actions")
         
         return simulated_response
     
@@ -605,10 +935,17 @@ class OptimizationPipeline:
         if section1["Course ID"] != section2["Course ID"]:
             logger.warning(f"Cannot merge sections with different courses: {section_id1}, {section_id2}")
             return
+            
+        # Calculate total enrollment (assuming we're merging because both are under-enrolled)
+        # Ensure the merged section isn't too large (max 35 students)
+        total_capacity = section1["# of Seats Available"] + section2["# of Seats Available"]
+        if total_capacity > 35:
+            # Cap at 35
+            logger.info(f"Capping merged section capacity at 35 (from original {total_capacity})")
+            total_capacity = 35
         
         # Update section capacity
-        sections_df.loc[sections_df["Section ID"] == section_id1, "# of Seats Available"] = \
-            section1["# of Seats Available"] + section2["# of Seats Available"]
+        sections_df.loc[sections_df["Section ID"] == section_id1, "# of Seats Available"] = total_capacity
         
         # Remove the second section
         sections_df.drop(sections_df[sections_df["Section ID"] == section_id2].index, inplace=True)
@@ -622,10 +959,38 @@ class OptimizationPipeline:
                     if section_id1 not in sections:
                         sections.append(section_id1)
                     preferences_df.loc[idx, "Preferred Sections"] = ";".join(sections)
+                    
+        logger.info(f"Merged sections {section_id1} and {section_id2} with new capacity {total_capacity}")
     
     def _remove_section(self, sections_df: pd.DataFrame, preferences_df: pd.DataFrame, 
                        section_id: str) -> None:
         """Remove a section"""
+        # Check if section exists
+        if not any(sections_df["Section ID"] == section_id):
+            logger.warning(f"Section {section_id} not found in sections DataFrame")
+            return
+            
+        # Get section information before removing
+        section = sections_df[sections_df["Section ID"] == section_id].iloc[0]
+        course_id = section["Course ID"]
+        teacher_id = section["Teacher Assigned"]
+        
+        # Count how many sections this teacher has
+        teacher_section_count = len(sections_df[sections_df["Teacher Assigned"] == teacher_id])
+        
+        # Don't remove if this is the teacher's only section
+        if teacher_section_count <= 1:
+            logger.warning(f"Cannot remove section {section_id} - it's the only section for teacher {teacher_id}")
+            return
+            
+        # Also count how many sections exist for this course
+        course_section_count = len(sections_df[sections_df["Course ID"] == course_id])
+        
+        # Don't remove if this is the only section for this course
+        if course_section_count <= 1:
+            logger.warning(f"Cannot remove section {section_id} - it's the only section for course {course_id}")
+            return
+        
         # Remove the section
         sections_df.drop(sections_df[sections_df["Section ID"] == section_id].index, inplace=True)
         
@@ -636,6 +1001,8 @@ class OptimizationPipeline:
                 if section_id in sections:
                     sections.remove(section_id)
                     preferences_df.loc[idx, "Preferred Sections"] = ";".join(sections)
+                    
+        logger.info(f"Removed section {section_id} for course {course_id}")
     
     def _split_section(self, sections_df: pd.DataFrame, teachers_df: pd.DataFrame, 
                       section_id: str) -> None:
@@ -647,42 +1014,25 @@ class OptimizationPipeline:
             
         # Get section information
         section = sections_df[sections_df["Section ID"] == section_id].iloc[0]
+        original_capacity = section["# of Seats Available"]
         
-        # Create a new section ID
-        new_section_id = f"{section_id}_B"
-        
-        # Create new section with half the capacity
-        new_row = section.copy()
-        new_row["Section ID"] = new_section_id
-        new_row["# of Seats Available"] = section["# of Seats Available"] // 2
-        
-        # Update original section capacity
-        sections_df.loc[sections_df["Section ID"] == section_id, "# of Seats Available"] = \
-            section["# of Seats Available"] // 2
-        
-        # Assign a different teacher if possible
-        available_teachers = teachers_df[teachers_df["Department"] == section["Department"]]["Teacher ID"].tolist()
-        if len(available_teachers) > 1 and section["Teacher Assigned"] in available_teachers:
-            available_teachers.remove(section["Teacher Assigned"])
-            new_row["Teacher Assigned"] = available_teachers[0]
-        
-        # Add the new section to the original DataFrame directly 
-        # (NOTE: don't reassign sections_df, as that creates a new DataFrame instead of modifying the original)
-        sections_df.loc[len(sections_df)] = new_row
-    
-    def _add_section(self, sections_df: pd.DataFrame, teachers_df: pd.DataFrame, 
-                    section_id: str) -> None:
-        """Add a new section based on an existing one"""
-        # Check if section exists
-        if not any(sections_df["Section ID"] == section_id):
-            logger.warning(f"Section {section_id} not found in sections DataFrame")
+        # Verify the section is actually large enough to split
+        if original_capacity <= 30:
+            logger.warning(f"Section {section_id} capacity ({original_capacity}) is not large enough to split")
             return
             
-        # Get section information
-        section = sections_df[sections_df["Section ID"] == section_id].iloc[0]
+        # Determine capacities for the two sections
+        # If original capacity is odd, give the extra seat to the original section
+        new_capacity1 = original_capacity // 2 + (original_capacity % 2)  
+        new_capacity2 = original_capacity // 2
         
-        # Create a new section ID (find the highest current section number and increment)
-        # Extract only base section numbers (handle cases where section IDs like "S002_B" exist)
+        # Ensure both sections have at least 15 seats
+        if new_capacity1 < 15 or new_capacity2 < 15:
+            logger.warning(f"Cannot split section {section_id} - resulting sections would be too small")
+            return
+            
+        # Create a new section ID based on sequential numbering
+        # Extract all section numbers
         section_numbers = []
         for s in sections_df["Section ID"]:
             if s.startswith("S"):
@@ -694,21 +1044,136 @@ class OptimizationPipeline:
                     # Skip if we can't convert to integer
                     pass
                 
-        new_section_num = max(section_numbers) + 1
+        # Generate new section ID
+        new_section_num = max(section_numbers) + 1 if section_numbers else 1
         new_section_id = f"S{new_section_num:03d}"
         
-        # Create new section
+        # Count sections per teacher
+        teacher_counts = sections_df.groupby("Teacher Assigned").size().to_dict()
+        
+        # Find a teacher who:
+        # 1. Is qualified to teach this course (already teaches it)
+        # 2. Has fewer than 6 classes
+        # 3. Is in the same department
+        
+        current_teacher = section["Teacher Assigned"]
+        course_id = section["Course ID"]
+        department = section["Department"]
+        
+        # Find teachers who teach this course
+        qualified_teachers = sections_df[sections_df["Course ID"] == course_id]["Teacher Assigned"].unique()
+        
+        # Find teachers in the same department
+        dept_teachers = teachers_df[teachers_df["Department"] == department]["Teacher ID"].unique()
+        
+        # Prioritize teachers already teaching this course
+        potential_teachers = []
+        for teacher in qualified_teachers:
+            if teacher != current_teacher and teacher_counts.get(teacher, 0) < 6:
+                potential_teachers.append(teacher)
+                
+        # If no qualified teachers, look at department teachers
+        if not potential_teachers:
+            for teacher in dept_teachers:
+                if teacher != current_teacher and teacher_counts.get(teacher, 0) < 6:
+                    potential_teachers.append(teacher)
+        
+        # If still no teachers, use current teacher (if they have fewer than 6 classes)
+        if not potential_teachers and teacher_counts.get(current_teacher, 0) < 6:
+            new_teacher = current_teacher
+        elif potential_teachers:
+            new_teacher = potential_teachers[0]
+        else:
+            logger.warning(f"Cannot find teacher for new section when splitting {section_id}")
+            return
+        
+        # Update original section capacity
+        sections_df.loc[sections_df["Section ID"] == section_id, "# of Seats Available"] = new_capacity1
+        
+        # Create new section with copied data but new capacity
         new_row = section.copy()
         new_row["Section ID"] = new_section_id
+        new_row["# of Seats Available"] = new_capacity2
+        new_row["Teacher Assigned"] = new_teacher
         
-        # Assign a different teacher if possible
-        available_teachers = teachers_df[teachers_df["Department"] == section["Department"]]["Teacher ID"].tolist()
-        if len(available_teachers) > 1 and section["Teacher Assigned"] in available_teachers:
-            available_teachers.remove(section["Teacher Assigned"])
-            new_row["Teacher Assigned"] = available_teachers[0]
+        # Add the new section to the DataFrame
+        sections_df.loc[len(sections_df)] = new_row
+        
+        logger.info(f"Split section {section_id} into two sections: {section_id} ({new_capacity1} seats) and {new_section_id} ({new_capacity2} seats)")
+    
+    def _add_section(self, sections_df: pd.DataFrame, teachers_df: pd.DataFrame, 
+                    section_id: str) -> None:
+        """Add a new section based on an existing one"""
+        # Check if section exists
+        if not any(sections_df["Section ID"] == section_id):
+            logger.warning(f"Section {section_id} not found in sections DataFrame")
+            return
+            
+        # Get section information
+        section = sections_df[sections_df["Section ID"] == section_id].iloc[0]
+        course_id = section["Course ID"]
+        department = section["Department"]
+        
+        # Create a new section ID (find the highest current section number and increment)
+        section_numbers = []
+        for s in sections_df["Section ID"]:
+            if s.startswith("S"):
+                # Remove the 'S' prefix and take only digits before any underscore
+                base = s[1:].split('_')[0]
+                try:
+                    section_numbers.append(int(base))
+                except ValueError:
+                    # Skip if we can't convert to integer
+                    pass
+                
+        new_section_num = max(section_numbers) + 1 if section_numbers else 1
+        new_section_id = f"S{new_section_num:03d}"
+        
+        # Count sections per teacher
+        teacher_counts = sections_df.groupby("Teacher Assigned").size().to_dict()
+        
+        # Find teachers who already teach this course
+        qualified_teachers = sections_df[sections_df["Course ID"] == course_id]["Teacher Assigned"].unique()
+        
+        # Find potential teachers who:
+        # 1. Already teach this course
+        # 2. Have fewer than 6 sections
+        potential_teachers = []
+        for teacher in qualified_teachers:
+            if teacher_counts.get(teacher, 0) < 6:
+                potential_teachers.append(teacher)
+                
+        if not potential_teachers:
+            # Find teachers in same department with fewer than 6 sections
+            dept_teachers = teachers_df[teachers_df["Department"] == department]["Teacher ID"].unique()
+            for teacher in dept_teachers:
+                if teacher_counts.get(teacher, 0) < 6:
+                    potential_teachers.append(teacher)
+                    
+        if not potential_teachers:
+            logger.warning(f"Cannot find teacher for new section of {course_id}")
+            return
+            
+        # Set capacity based on department norms
+        if department == "Special":
+            capacity = 15
+        elif department == "PE":
+            capacity = 35
+        elif department == "Science":
+            capacity = 30
+        else:  
+            capacity = 25  # Default for other departments
+        
+        # Create new section with appropriate capacity
+        new_row = section.copy()
+        new_row["Section ID"] = new_section_id
+        new_row["# of Seats Available"] = capacity
+        new_row["Teacher Assigned"] = potential_teachers[0]
         
         # Add the new section to the original DataFrame directly
         sections_df.loc[len(sections_df)] = new_row
+        
+        logger.info(f"Added new section {new_section_id} for course {course_id} with capacity {capacity}, assigned to teacher {potential_teachers[0]}")
     
     def _save_final_results(self, schedule: Schedule, utilization_df: pd.DataFrame, output_dir: Path) -> None:
         """

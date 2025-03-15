@@ -301,12 +301,15 @@ scheduling-platform/
 - AWS EC2 instance (recommended: t3.large or better with 16GB+ RAM)
 - Docker and Docker Compose installed
 - AWS S3 bucket for file storage
-- Gurobi license key: ba446ea2-f2f6-4614-8e8f-aa378d1404b5
+- Gurobi WLS license credentials:
+  - WLSACCESSID=327abad8-ff0c-4892-97d4-48586a57395e
+  - WLSSECRET=2b3cf284-dd92-436b-a207-7bd4450702ce
+  - LICENSEID=2628134
 
 ### Installation Steps
 
 1. Clone this repository to your EC2 instance
-2. The Gurobi license key is already configured in the Dockerfile
+2. The Gurobi WLS license credentials are already configured in the Dockerfile
 3. Create a `.env` file with necessary configuration variables
 4. Start the database containers:
    ```
@@ -335,20 +338,47 @@ To verify that the system components are working correctly, use the provided tes
      - Iterates until all sections meet the 75% utilization threshold
    - Generates output files in the pipeline_test/output directory
 
-2. Test Gurobi functionality:
+2. Test MILP optimizer specifically:
+   ```
+   docker run --rm -v "$(pwd):/app" -w /app school-optimizer python test_milp_only.py
+   ```
+   This test focuses only on the MILP component with detailed logging for troubleshooting.
+
+3. Test Gurobi functionality:
    ```
    # Inside the optimizer container
    docker-compose exec optimizer python /app/test_gurobi.py
    ```
 
-3. View test results and HTML dashboard:
+4. View test results and HTML dashboard:
    ```
    ls -la pipeline_test/output/final/
    # To view the dashboard in a browser
    firefox pipeline_test/output/final/dashboard.html
    ```
 
-The test environment automatically handles the Gurobi license (ba446ea2-f2f6-4614-8e8f-aa378d1404b5) setup and validation.
+The test environment automatically handles the Gurobi WLS license setup and validation.
+
+### Running Tests for the Optimizer
+
+To build the optimizer Docker image:
+```
+docker build -t school-optimizer -f scheduling-platform/optimizer/Dockerfile scheduling-platform/optimizer
+```
+
+To run the optimizer with specific test inputs:
+```
+docker run --rm -v "$(pwd):/app" -w /app school-optimizer python run_optimizer.py --input "Test Input Files/" --output "results/" --threshold 0.75 --max-iterations 5
+```
+
+To debug optimizer issues:
+1. Increase log level in optimizer scripts by using:
+   ```python
+   logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+   ```
+
+2. Use test_milp_only.py to isolate and test just the MILP component
+3. Check log files generated in the debug/ directory
 
 ## Using the Platform
 
@@ -412,7 +442,7 @@ The platform includes two main scheduling algorithms plus an integrated optimiza
      - REMOVE: Remove a section with insufficient demand
      - MERGE: Combine two sections with low enrollment
    - Generates comprehensive reports and a HTML dashboard with results
-   - Automatically handles Gurobi licensing with key: ba446ea2-f2f6-4614-8e8f-aa378d1404b5
+   - Automatically handles Gurobi WLS licensing with configured credentials
 
 You can run the integrated pipeline using:
 ```
@@ -469,10 +499,10 @@ python run_optimizer.py --input "Test Input Files/" --output "results/" --thresh
   - Verify input data formats and values
   
 - **Gurobi License Issues**:
-  - If you see "License expired" or "not recognized as belonging to an academic domain" errors
+  - If you see license validation errors
   - The system will automatically fall back to using the greedy algorithm
-  - For best results, run the system from an academic network or through a university VPN
-  - The license key (ba446ea2-f2f6-4614-8e8f-aa378d1404b5) is already configured in the system
+  - The WLS license credentials are already configured in the system
+  - Note that the WLS license requires internet connectivity to validate with Gurobi's cloud service
 
 - **Frontend Display Problems**:
   - Check browser console for errors

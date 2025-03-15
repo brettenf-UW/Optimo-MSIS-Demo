@@ -1,72 +1,30 @@
 Teacher ID,Section ID,Course ID,Period
-T001,S002,Medical Career,G1
+T001,S001,Medical Career,G1
+T001,S002,Medical Career,R1
 T002,S003,Heroes Teach,G2
-T002,S004,Heroes Teach,R2
-T019,S005,Study Hall,R3
-T020,S006,Study Hall,R4
-T019,S007,Study Hall,G1
-T020,S008,Study Hall,G2
-T019,S009,Study Hall,G3
-T020,S010,Study Hall,G4
-T019,S011,Study Hall,R1
-T020,S012,Study Hall,R2
-T021,S013,Study Hall,R3
-T017,S014,Sports Med,G3
-T018,S015,Sports Med,G4
-T017,S016,Sports Med,R3
-T018,S017,Sports Med,R4
-T017,S018,Sports Med,G1
-T018,S019,Sports Med,R1
-T017,S020,Sports Med,G2
-T018,S021,Sports Med,R2
-T022,S022,PE,G3
-T022,S023,PE,G4
-T022,S024,PE,R1
-T022,S025,PE,R2
-T003,S026,English 12,G4
-T004,S027,English 12,G3
-T003,S028,English 12,R1
-T007,S029,Biology,R3
-T008,S030,Biology,R4
-T004,S031,English 9,G4
-T003,S032,English 9,G3
-T004,S033,English 9,R3
-T015,S034,Economics,R2
-T016,S035,Economics,R3
-T015,S036,Economics,R4
-T005,S037,Math 1,G1
-T006,S038,Math 1,G2
-T005,S039,Math 1,G3
-T006,S040,Math 4,G4
-T005,S041,Math 4,R1
-T006,S042,Math 4,R2
-T016,S043,US History,R4
-T015,S044,US History,R3
-T016,S045,US History,G1
-T009,S046,Chemistry,G1
-T010,S047,Chemistry,G2
-T015,S048,Government,G2
-T016,S049,Government,G3
-T023,S050,Government,R4
-T005,S051,Math 3,G4
-T006,S052,Math 3,R1
-T024,S053,Math 3,G1
-T003,S054,English 10,R2
-T004,S055,English 10,R4
-T025,S056,English 10,R3
-T025,S057,English 11,R4
-T025,S058,English 11,G1
-T025,S059,English 11,G2
-T024,S060,Math 2,G3
-T024,S061,Math 2,G4
-T024,S062,Math 2,R1
-T023,S063,World History,R3
-T023,S064,World History,G1
-T023,S065,World History,G2
-T011,S066,AP Biology,G3
-T012,S067,AP Biology,G4
-T013,S068,Physics,R1
-T014,S069,Physics,R2
-T002,S002_B,Medical Career,R1
-T001,S070,Heroes Teach,G2
-T001,S071,Heroes Teach,R2
+T015,S005,Study Hall,G1
+T015,S007,Study Hall,G2
+T013,S009,Sports Med,G3
+T014,S010,Sports Med,G4
+T013,S011,Sports Med,R2
+T014,S012,Sports Med,R3
+T013,S013,PE,R1
+T014,S014,PE,R4
+T007,S015,Physics,G3
+T011,S017,World History,R4
+T009,S019,Biology,R3
+T007,S021,Chemistry,G4
+T011,S023,Economics,G1
+T005,S025,Math 3,G2
+T011,S027,US History,G3
+T003,S029,English 9,G4
+T005,S031,Math 2,R1
+T011,S033,Government,R2
+T005,S035,Math 1,R2
+T006,S036,Math 1,R1
+T003,S037,English 10,R3
+T005,S039,Math 4,R4
+T010,S042,AP Biology,G3
+T003,S043,English 12,G1
+T003,S045,English 11,G2
+T010,S046,AP Biology,G4

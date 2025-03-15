@@ -1,0 +1,38 @@
+2025-03-15 01:22:04,127 - INFO - Data loader initialized successfully
+2025-03-15 01:22:04,128 - INFO - Starting data load process...
+2025-03-15 01:22:04,129 - INFO - Loading base data files...
+2025-03-15 01:22:04,130 - INFO - Students loaded: 100 records
+2025-03-15 01:22:04,132 - INFO - Teachers loaded: 16 records
+2025-03-15 01:22:04,134 - INFO - Sections loaded: 26 records
+2025-03-15 01:22:04,136 - INFO - Periods loaded: 8 records
+2025-03-15 01:22:04,136 - INFO - Loading relationship data...
+2025-03-15 01:22:04,138 - INFO - Student preferences: 100 records
+2025-03-15 01:22:04,139 - INFO - Teacher unavailability: 4 records
+2025-03-15 01:22:04,140 - INFO - Validating data relationships...
+2025-03-15 01:22:04,143 - WARNING - Student ST026 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,144 - WARNING - Student ST027 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,144 - WARNING - Student ST028 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,145 - WARNING - Student ST029 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,145 - WARNING - Student ST030 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,146 - WARNING - Student ST031 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,146 - WARNING - Student ST032 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,147 - WARNING - Student ST033 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,147 - WARNING - Student ST034 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,147 - WARNING - Student ST035 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,148 - WARNING - Student ST036 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,148 - WARNING - Student ST037 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,149 - WARNING - Student ST038 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,149 - WARNING - Student ST039 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,150 - WARNING - Student ST040 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,150 - WARNING - Student ST041 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,151 - WARNING - Student ST042 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,151 - WARNING - Student ST043 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,152 - WARNING - Student ST044 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,152 - WARNING - Student ST045 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,153 - WARNING - Student ST046 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,153 - WARNING - Student ST047 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,154 - WARNING - Student ST048 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,154 - WARNING - Student ST049 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,155 - WARNING - Student ST050 references unknown courses: {'English 10'}
+2025-03-15 01:22:04,159 - WARNING - Found 25 validation issues
+2025-03-15 01:22:04,164 - WARNING - Data loaded with 25 validation issues

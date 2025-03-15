@@ -1,75 +1,31 @@
 Section ID,Course ID,Teacher Assigned,# of Seats Available,Department
-S002,Medical Career,T001,1,Special
-S003,Heroes Teach,T002,15,Special
-S004,Heroes Teach,T002,15,Special
-S005,Study Hall,T019,25,General
-S006,Study Hall,T020,25,General
-S007,Study Hall,T019,25,General
-S008,Study Hall,T020,25,General
-S009,Study Hall,T019,25,General
-S010,Study Hall,T020,25,General
-S011,Study Hall,T019,25,General
-S012,Study Hall,T020,25,General
-S013,Study Hall,T021,25,General
-S014,Sports Med,T017,15,PE
-S015,Sports Med,T018,15,PE
-S016,Sports Med,T017,15,PE
-S017,Sports Med,T018,15,PE
-S018,Sports Med,T017,15,PE
-S019,Sports Med,T018,15,PE
-S020,Sports Med,T017,15,PE
-S021,Sports Med,T018,15,PE
-S022,PE,T022,35,PE
-S023,PE,T022,35,PE
-S024,PE,T022,35,PE
-S025,PE,T022,35,PE
-S026,English 12,T003,25,English
-S027,English 12,T004,25,English
-S028,English 12,T003,25,English
-S029,Biology,T007,30,Science
-S030,Biology,T008,30,Science
-S031,English 9,T004,25,English
-S032,English 9,T003,25,English
-S033,English 9,T004,25,English
-S034,Economics,T015,25,Social Studies
-S035,Economics,T016,25,Social Studies
-S036,Economics,T015,25,Social Studies
-S037,Math 1,T005,25,Math
-S038,Math 1,T006,25,Math
-S039,Math 1,T005,25,Math
-S040,Math 4,T006,25,Math
-S041,Math 4,T005,25,Math
-S042,Math 4,T006,25,Math
-S043,US History,T016,25,Social Studies
-S044,US History,T015,25,Social Studies
-S045,US History,T016,25,Social Studies
-S046,Chemistry,T009,30,Science
-S047,Chemistry,T010,30,Science
-S048,Government,T015,25,Social Studies
-S049,Government,T016,25,Social Studies
-S050,Government,T023,25,Social Studies
-S051,Math 3,T005,25,Math
-S052,Math 3,T006,25,Math
-S053,Math 3,T024,25,Math
-S054,English 10,T003,25,English
-S055,English 10,T004,25,English
-S056,English 10,T025,25,English
-S057,English 11,T025,25,English
-S058,English 11,T025,25,English
-S059,English 11,T025,25,English
-S060,Math 2,T024,25,Math
-S061,Math 2,T024,25,Math
-S062,Math 2,T024,25,Math
-S063,World History,T023,25,Social Studies
-S064,World History,T023,25,Social Studies
-S065,World History,T023,25,Social Studies
-S066,AP Biology,T011,30,Science
-S067,AP Biology,T012,30,Science
-S068,Physics,T013,30,Science
-S069,Physics,T014,30,Science
-S002_B,Medical Career,T002,7,Special
-S070,Heroes Teach,T001,15,Special
-S002_B,Medical Career,T002,3,Special
-S071,Heroes Teach,T001,15,Special
-S002_B,Medical Career,T002,1,Special
-S072,Heroes Teach,T001,15,Special
+S001,Medical Career,T001,15,Special
+S002,Medical Career,T001,15,Special
+S003,Heroes Teach,T002,30,Special
+S005,Study Hall,T015,35,General
+S007,Study Hall,T015,35,General
+S009,Sports Med,T013,15,PE
+S010,Sports Med,T014,15,PE
+S011,Sports Med,T013,15,PE
+S012,Sports Med,T014,15,PE
+S013,PE,T013,35,PE
+S014,PE,T014,35,PE
+S015,Physics,T007,35,Science
+S017,World History,T011,35,Social Studies
+S019,Biology,T009,35,Science
+S021,Chemistry,T007,35,Science
+S023,Economics,T011,35,Social Studies
+S025,Math 3,T005,35,Math
+S027,US History,T011,35,Social Studies
+S029,English 9,T003,35,English
+S031,Math 2,T005,25,Math
+S032,Math 2,T006,25,Math
+S033,Government,T011,35,Social Studies
+S035,Math 1,T005,25,Math
+S036,Math 1,T006,25,Math
+S037,English 10,T003,35,English
+S039,Math 4,T005,35,Math
+S042,AP Biology,T010,35,Science
+S043,English 12,T003,35,English
+S045,English 11,T003,35,English
+S046,AP Biology,T010,30,Science

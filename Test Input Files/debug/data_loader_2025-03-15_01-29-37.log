@@ -1,0 +1,90 @@
+2025-03-15 01:29:37,888 - INFO - Data loader initialized successfully
+2025-03-15 01:29:37,888 - INFO - Starting data load process...
+2025-03-15 01:29:37,888 - INFO - Loading base data files...
+2025-03-15 01:29:37,890 - INFO - Students loaded: 100 records
+2025-03-15 01:29:37,891 - INFO - Teachers loaded: 16 records
+2025-03-15 01:29:37,892 - INFO - Sections loaded: 46 records
+2025-03-15 01:29:37,892 - INFO - Periods loaded: 8 records
+2025-03-15 01:29:37,893 - INFO - Loading relationship data...
+2025-03-15 01:29:37,893 - INFO - Student preferences: 100 records
+2025-03-15 01:29:37,894 - INFO - Teacher unavailability: 1 records
+2025-03-15 01:29:37,894 - INFO - Validating data relationships...
+2025-03-15 01:29:37,899 - INFO - All relationships are valid
+2025-03-15 01:29:37,899 - INFO - Data loaded and validated successfully
+2025-03-15 01:29:47,898 - INFO - Data loader initialized successfully
+2025-03-15 01:29:47,898 - INFO - Starting data load process...
+2025-03-15 01:29:47,899 - INFO - Loading base data files...
+2025-03-15 01:29:47,900 - INFO - Students loaded: 100 records
+2025-03-15 01:29:47,900 - INFO - Teachers loaded: 16 records
+2025-03-15 01:29:47,902 - INFO - Sections loaded: 39 records
+2025-03-15 01:29:47,902 - INFO - Periods loaded: 8 records
+2025-03-15 01:29:47,902 - INFO - Loading relationship data...
+2025-03-15 01:29:47,903 - INFO - Student preferences: 100 records
+2025-03-15 01:29:47,904 - INFO - Teacher unavailability: 4 records
+2025-03-15 01:29:47,904 - INFO - Validating data relationships...
+2025-03-15 01:29:47,909 - INFO - All relationships are valid
+2025-03-15 01:29:47,909 - INFO - Data loaded and validated successfully
+2025-03-15 01:29:57,372 - INFO - Data loader initialized successfully
+2025-03-15 01:29:57,372 - INFO - Starting data load process...
+2025-03-15 01:29:57,372 - INFO - Loading base data files...
+2025-03-15 01:29:57,373 - INFO - Students loaded: 100 records
+2025-03-15 01:29:57,374 - INFO - Teachers loaded: 16 records
+2025-03-15 01:29:57,375 - INFO - Sections loaded: 36 records
+2025-03-15 01:29:57,376 - INFO - Periods loaded: 8 records
+2025-03-15 01:29:57,376 - INFO - Loading relationship data...
+2025-03-15 01:29:57,377 - INFO - Student preferences: 100 records
+2025-03-15 01:29:57,378 - INFO - Teacher unavailability: 4 records
+2025-03-15 01:29:57,378 - INFO - Validating data relationships...
+2025-03-15 01:29:57,383 - INFO - All relationships are valid
+2025-03-15 01:29:57,383 - INFO - Data loaded and validated successfully
+2025-03-15 01:30:12,446 - INFO - Data loader initialized successfully
+2025-03-15 01:30:12,446 - INFO - Starting data load process...
+2025-03-15 01:30:12,446 - INFO - Loading base data files...
+2025-03-15 01:30:12,447 - INFO - Students loaded: 100 records
+2025-03-15 01:30:12,448 - INFO - Teachers loaded: 16 records
+2025-03-15 01:30:12,450 - INFO - Sections loaded: 28 records
+2025-03-15 01:30:12,451 - INFO - Periods loaded: 8 records
+2025-03-15 01:30:12,451 - INFO - Loading relationship data...
+2025-03-15 01:30:12,452 - INFO - Student preferences: 100 records
+2025-03-15 01:30:12,453 - INFO - Teacher unavailability: 4 records
+2025-03-15 01:30:12,453 - INFO - Validating data relationships...
+2025-03-15 01:30:12,459 - INFO - All relationships are valid
+2025-03-15 01:30:12,459 - INFO - Data loaded and validated successfully
+2025-03-15 01:30:22,355 - INFO - Data loader initialized successfully
+2025-03-15 01:30:22,355 - INFO - Starting data load process...
+2025-03-15 01:30:22,355 - INFO - Loading base data files...
+2025-03-15 01:30:22,356 - INFO - Students loaded: 100 records
+2025-03-15 01:30:22,357 - INFO - Teachers loaded: 16 records
+2025-03-15 01:30:22,359 - INFO - Sections loaded: 27 records
+2025-03-15 01:30:22,360 - INFO - Periods loaded: 8 records
+2025-03-15 01:30:22,360 - INFO - Loading relationship data...
+2025-03-15 01:30:22,361 - INFO - Student preferences: 100 records
+2025-03-15 01:30:22,362 - INFO - Teacher unavailability: 4 records
+2025-03-15 01:30:22,362 - INFO - Validating data relationships...
+2025-03-15 01:30:22,365 - WARNING - Student ST051 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,365 - WARNING - Student ST052 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,365 - WARNING - Student ST053 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,365 - WARNING - Student ST054 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,366 - WARNING - Student ST055 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,366 - WARNING - Student ST056 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,366 - WARNING - Student ST057 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,366 - WARNING - Student ST058 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,367 - WARNING - Student ST059 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,367 - WARNING - Student ST060 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,367 - WARNING - Student ST061 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,367 - WARNING - Student ST062 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,368 - WARNING - Student ST063 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,368 - WARNING - Student ST064 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,368 - WARNING - Student ST065 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,368 - WARNING - Student ST066 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,369 - WARNING - Student ST067 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,369 - WARNING - Student ST068 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,369 - WARNING - Student ST069 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,370 - WARNING - Student ST070 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,370 - WARNING - Student ST071 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,370 - WARNING - Student ST072 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,371 - WARNING - Student ST073 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,371 - WARNING - Student ST074 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,371 - WARNING - Student ST075 references unknown courses: {'English 11'}
+2025-03-15 01:30:22,373 - WARNING - Found 25 validation issues
+2025-03-15 01:30:22,373 - WARNING - Data loaded with 25 validation issues

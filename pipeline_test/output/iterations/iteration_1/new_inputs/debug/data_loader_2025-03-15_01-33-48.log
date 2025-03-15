@@ -1,0 +1,102 @@
+2025-03-15 01:33:48,725 - INFO - Data loader initialized successfully
+2025-03-15 01:33:48,726 - INFO - Starting data load process...
+2025-03-15 01:33:48,726 - INFO - Loading base data files...
+2025-03-15 01:33:48,727 - INFO - Students loaded: 100 records
+2025-03-15 01:33:48,728 - INFO - Teachers loaded: 16 records
+2025-03-15 01:33:48,729 - INFO - Sections loaded: 38 records
+2025-03-15 01:33:48,730 - INFO - Periods loaded: 8 records
+2025-03-15 01:33:48,730 - INFO - Loading relationship data...
+2025-03-15 01:33:48,731 - INFO - Student preferences: 100 records
+2025-03-15 01:33:48,732 - INFO - Teacher unavailability: 4 records
+2025-03-15 01:33:48,732 - INFO - Validating data relationships...
+2025-03-15 01:33:48,736 - INFO - All relationships are valid
+2025-03-15 01:33:48,736 - INFO - Data loaded and validated successfully
+2025-03-15 01:33:56,586 - INFO - Data loader initialized successfully
+2025-03-15 01:33:56,586 - INFO - Starting data load process...
+2025-03-15 01:33:56,586 - INFO - Loading base data files...
+2025-03-15 01:33:56,587 - INFO - Students loaded: 100 records
+2025-03-15 01:33:56,588 - INFO - Teachers loaded: 16 records
+2025-03-15 01:33:56,589 - INFO - Sections loaded: 36 records
+2025-03-15 01:33:56,590 - INFO - Periods loaded: 8 records
+2025-03-15 01:33:56,590 - INFO - Loading relationship data...
+2025-03-15 01:33:56,591 - INFO - Student preferences: 100 records
+2025-03-15 01:33:56,592 - INFO - Teacher unavailability: 4 records
+2025-03-15 01:33:56,592 - INFO - Validating data relationships...
+2025-03-15 01:33:56,597 - INFO - All relationships are valid
+2025-03-15 01:33:56,597 - INFO - Data loaded and validated successfully
+2025-03-15 01:34:06,146 - INFO - Data loader initialized successfully
+2025-03-15 01:34:06,146 - INFO - Starting data load process...
+2025-03-15 01:34:06,146 - INFO - Loading base data files...
+2025-03-15 01:34:06,147 - INFO - Students loaded: 100 records
+2025-03-15 01:34:06,148 - INFO - Teachers loaded: 16 records
+2025-03-15 01:34:06,149 - INFO - Sections loaded: 30 records
+2025-03-15 01:34:06,150 - INFO - Periods loaded: 8 records
+2025-03-15 01:34:06,150 - INFO - Loading relationship data...
+2025-03-15 01:34:06,151 - INFO - Student preferences: 100 records
+2025-03-15 01:34:06,152 - INFO - Teacher unavailability: 4 records
+2025-03-15 01:34:06,153 - INFO - Validating data relationships...
+2025-03-15 01:34:06,156 - WARNING - Student ST076 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,156 - WARNING - Student ST077 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,157 - WARNING - Student ST078 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,157 - WARNING - Student ST079 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,157 - WARNING - Student ST080 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,157 - WARNING - Student ST081 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,158 - WARNING - Student ST082 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,158 - WARNING - Student ST083 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,158 - WARNING - Student ST084 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,158 - WARNING - Student ST085 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,159 - WARNING - Student ST086 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,159 - WARNING - Student ST087 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,159 - WARNING - Student ST088 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,159 - WARNING - Student ST089 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,159 - WARNING - Student ST090 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,160 - WARNING - Student ST091 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,160 - WARNING - Student ST092 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,160 - WARNING - Student ST093 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,160 - WARNING - Student ST094 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,161 - WARNING - Student ST095 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,161 - WARNING - Student ST096 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,161 - WARNING - Student ST097 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,161 - WARNING - Student ST098 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,161 - WARNING - Student ST099 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,162 - WARNING - Student ST100 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:06,162 - WARNING - Found 25 validation issues
+2025-03-15 01:34:06,162 - WARNING - Data loaded with 25 validation issues
+2025-03-15 01:34:21,475 - INFO - Data loader initialized successfully
+2025-03-15 01:34:21,475 - INFO - Starting data load process...
+2025-03-15 01:34:21,475 - INFO - Loading base data files...
+2025-03-15 01:34:21,476 - INFO - Students loaded: 100 records
+2025-03-15 01:34:21,477 - INFO - Teachers loaded: 16 records
+2025-03-15 01:34:21,479 - INFO - Sections loaded: 25 records
+2025-03-15 01:34:21,480 - INFO - Periods loaded: 8 records
+2025-03-15 01:34:21,480 - INFO - Loading relationship data...
+2025-03-15 01:34:21,481 - INFO - Student preferences: 100 records
+2025-03-15 01:34:21,482 - INFO - Teacher unavailability: 4 records
+2025-03-15 01:34:21,482 - INFO - Validating data relationships...
+2025-03-15 01:34:21,485 - WARNING - Student ST076 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,486 - WARNING - Student ST077 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,486 - WARNING - Student ST078 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,486 - WARNING - Student ST079 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,486 - WARNING - Student ST080 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,487 - WARNING - Student ST081 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,487 - WARNING - Student ST082 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,487 - WARNING - Student ST083 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,487 - WARNING - Student ST084 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,487 - WARNING - Student ST085 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,488 - WARNING - Student ST086 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,488 - WARNING - Student ST087 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,488 - WARNING - Student ST088 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,488 - WARNING - Student ST089 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,489 - WARNING - Student ST090 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,489 - WARNING - Student ST091 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,489 - WARNING - Student ST092 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,489 - WARNING - Student ST093 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,490 - WARNING - Student ST094 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,490 - WARNING - Student ST095 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,490 - WARNING - Student ST096 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,490 - WARNING - Student ST097 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,491 - WARNING - Student ST098 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,491 - WARNING - Student ST099 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,491 - WARNING - Student ST100 references unknown courses: {'AP Biology'}
+2025-03-15 01:34:21,491 - WARNING - Found 25 validation issues
+2025-03-15 01:34:21,491 - WARNING - Data loaded with 25 validation issues

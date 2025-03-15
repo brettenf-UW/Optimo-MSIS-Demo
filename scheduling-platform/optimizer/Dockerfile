@@ -20,9 +20,14 @@ export PATH=$PATH:$GUROBI_HOME/bin\n\
 export LD_LIBRARY_PATH=$GUROBI_HOME/lib:$LD_LIBRARY_PATH\n\
 \n\
 if [ ! -f /opt/gurobi/gurobi.lic ]; then\n\
-    echo "Setting up Gurobi license..."\n\
-    # Use Gurobi license key\n\
-    echo "y" | grbgetkey ba446ea2-f2f6-4614-8e8f-aa378d1404b5\n\
+    echo "Setting up Gurobi WLS license..."\n\
+    mkdir -p /opt/gurobi\n\
+    cat > /opt/gurobi/gurobi.lic << EOF\n\
+# Gurobi WLS license file\n\
+WLSACCESSID=327abad8-ff0c-4892-97d4-48586a57395e\n\
+WLSSECRET=2b3cf284-dd92-436b-a207-7bd4450702ce\n\
+LICENSEID=2628134\n\
+EOF\n\
 fi\n\
 \n\
 # Execute the command passed to the script\n\

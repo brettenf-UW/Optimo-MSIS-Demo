@@ -51,9 +51,10 @@ class GreedyOptimizer:
         self.section_to_course = {}
         self.section_to_teacher = {}
         self.section_to_dept = {}
+        # Define special course period restrictions using exact same format as MILP
         self.special_course_periods = {
-            'Medical Career': [p.id for p in periods.values() if p.name in ['R1', 'G1']],
-            'Heroes Teach': [p.id for p in periods.values() if p.name in ['R2', 'G2']]
+            'Medical Career': ['R1', 'G1'],
+            'Heroes Teach': ['R2', 'G2']
         }
         self.sped_students = {s_id for s_id, s in students.items() if s.has_special_needs}
         
