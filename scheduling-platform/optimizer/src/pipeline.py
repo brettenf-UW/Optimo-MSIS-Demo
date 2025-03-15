@@ -1,1350 +1,776 @@
+#!/usr/bin/env python3
 """
-Integrated Optimization Pipeline
+School Schedule Optimization Pipeline
 
-This module orchestrates the complete optimization process:
-1. Greedy algorithm generates a warm start solution
-2. MILP uses the warm start for further optimization
-3. Schedule optimizer with Claude agent adjusts underutilized sections
-4. Process repeats until all sections have at least 75% utilization
-
-Usage:
-python -m src.pipeline --input_dir /path/to/inputs --output_dir /path/to/outputs
+This module provides the OptimizationPipeline class that coordinates the multi-stage
+optimization process:
+1. Data loading with validation
+2. Greedy algorithm for initial solution
+3. MILP optimization for refined solution
+4. Claude agent for section adjustment
+5. Iterative improvement until utilization targets are met
 """
 import os
-import sys
 import time
 import json
-import argparse
 import logging
-import pandas as pd
-import requests
-import gurobipy as gp
+import shutil
 from pathlib import Path
-from typing import Dict, List, Any, Tuple, Optional
+from typing import Dict, List, Any, Optional
+import pandas as pd
+import datetime
 
-# Local imports
-from .optimizer import ScheduleOptimizer
-from .algorithms.greedy import GreedyOptimizer
-from .algorithms.milp import MILPOptimizer
-from .models.entities import Schedule, Section
-from .data.converter import DataConverter
+# Import the components from our algorithms
+from .algorithms.load import ScheduleDataLoader
+from .algorithms.greedy import load_data as greedy_load_data
+from .algorithms.greedy import preprocess_data, greedy_schedule_sections, greedy_assign_students
+from .algorithms.milp_soft import ScheduleOptimizer
+from .algorithms.schedule_optimizer import UtilizationOptimizer
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
-
-# Claude API key
-CLAUDE_API_KEY = "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"
-CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 
 class OptimizationPipeline:
     """
-    Pipeline that orchestrates the complete optimization process through multiple stages:
-    1. Greedy optimization for warm start
-    2. MILP optimization for optimal solution
-    3. Section adjustment via Claude agent for underutilized sections
-    4. Iterative refinement until utilization thresholds are met
+    Orchestrates the multi-stage school scheduling optimization process,
+    integrating greedy initial solutions, MILP optimization, and Claude agent 
+    section adjustments.
     """
     
-    def __init__(self, input_dir: str, output_dir: str, utilization_threshold: float = 0.75):
+    def __init__(self, input_dir: Path, output_dir: Path, utilization_threshold: float = 0.75):
         """
         Initialize the optimization pipeline.
         
         Args:
-            input_dir: Directory containing input files
-            output_dir: Directory for output files
-            utilization_threshold: Minimum section utilization threshold (default: 0.75)
+            input_dir: Directory containing input CSV files
+            output_dir: Directory to save output files
+            utilization_threshold: Minimum section utilization (0.0-1.0)
         """
         self.input_dir = Path(input_dir)
         self.output_dir = Path(output_dir)
         self.utilization_threshold = utilization_threshold
-        self.iteration = 0
         self.max_iterations = 5
+        self.metrics = {
+            "greedy_time": 0,
+            "milp_time": 0,
+            "agent_time": 0,
+            "total_time": 0
+        }
         
-        # Create iteration directories
+        # Create output directory
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Setup iterations subdirectory
         self.iterations_dir = self.output_dir / "iterations"
         self.iterations_dir.mkdir(parents=True, exist_ok=True)
         
-        # Metrics for tracking performance
-        self.metrics = {
-            'total_time': 0,
-            'greedy_time': 0,
-            'milp_time': 0,
-            'agent_time': 0,
-            'initial_utilization': 0,
-            'final_utilization': 0,
-            'iterations': 0,
-            'sections_adjusted': 0
-        }
-        
-        logger.info(f"Initialized optimization pipeline with utilization threshold: {utilization_threshold}")
-    
-    def run(self) -> Dict[str, Any]:
+        # Setup final output directory
+        self.final_dir = self.output_dir / "final"
+        self.final_dir.mkdir(parents=True, exist_ok=True)
+
+    def _prepare_iteration_directory(self, iteration: int) -> Path:
         """
-        Run the complete optimization pipeline.
-        
-        Returns:
-            Dictionary with optimization results and metrics
-        """
-        start_time = time.time()
-        logger.info("Starting optimization pipeline")
-        
-        # Initial input files are in the input directory
-        current_input_dir = self.input_dir
-        
-        # Continue optimizing until we reach the target utilization or max iterations
-        self.iteration = 0
-        overall_result = None
-        
-        while self.iteration < self.max_iterations:
-            logger.info(f"Starting iteration {self.iteration + 1}/{self.max_iterations}")
-            
-            # Create iteration output directory
-            iteration_dir = self.iterations_dir / f"iteration_{self.iteration + 1}"
-            iteration_dir.mkdir(exist_ok=True)
-            
-            try:
-                # Run greedy optimization
-                greedy_start = time.time()
-                greedy_schedule, greedy_optimizer = self._run_greedy_optimization(current_input_dir, iteration_dir)
-                self.metrics['greedy_time'] += time.time() - greedy_start
-                
-                # Run MILP optimization using greedy as warm start
-                milp_start = time.time()
-                milp_schedule = self._run_milp_optimization(
-                    greedy_optimizer.students,
-                    greedy_optimizer.teachers,
-                    greedy_optimizer.sections,
-                    greedy_optimizer.periods,
-                    greedy_optimizer.student_preferences,
-                    greedy_schedule,
-                    iteration_dir
-                )
-                self.metrics['milp_time'] += time.time() - milp_start
-                
-                # Check utilization and identify underutilized sections
-                utilization_df = DataConverter.generate_utilization_report(milp_schedule)
-                underutilized_sections = utilization_df[
-                    utilization_df['Utilization'] < self.utilization_threshold
-                ]
-                
-                # Log details about underutilized sections
-                logger.info(f"Found {len(underutilized_sections)} sections below {self.utilization_threshold*100}% utilization:")
-                for _, row in underutilized_sections.iterrows():
-                    logger.info(f"  - Section {row['Section ID']} ({row['Course ID']}): {row['Utilization']:.2%} utilization ({row['Enrollment']}/{row['Capacity']} students)")
-                
-                # Record metrics for this iteration
-                avg_utilization = utilization_df['Utilization'].mean()
-                if self.iteration == 0:
-                    self.metrics['initial_utilization'] = avg_utilization
-                
-                logger.info(f"Iteration {self.iteration + 1} - Average utilization: {avg_utilization:.2f}")
-                logger.info(f"Found {len(underutilized_sections)} underutilized sections")
-                
-                # If no underutilized sections or reached max iterations, we're done
-                if len(underutilized_sections) == 0 or self.iteration == self.max_iterations - 1:
-                    overall_result = {
-                        'schedule': milp_schedule,
-                        'utilization': utilization_df,
-                        'output_dir': str(iteration_dir)
-                    }
-                    self.metrics['final_utilization'] = avg_utilization
-                    break
-                
-                # If this is the first iteration and there are a lot of underutilized sections,
-                # we might want to skip running Claude agent and just use the first iteration result
-                if self.iteration == 0 and len(underutilized_sections) > 10:
-                    logger.warning(f"Found {len(underutilized_sections)} underutilized sections in first iteration")
-                    logger.warning("This suggests fundamental data issues that section adjustments may not fix")
-                    logger.info("Continuing with section adjustments, but consider reviewing input data")
-                
-                # Run Claude agent to adjust underutilized sections - safer version that won't create problematic sections
-                agent_start = time.time()
-                new_input_files = self._run_claude_agent(
-                    milp_schedule, 
-                    underutilized_sections, 
-                    current_input_dir,
-                    iteration_dir
-                )
-                self.metrics['agent_time'] += time.time() - agent_start
-                
-                # Check if any actions were actually performed
-                actions_performed = self._check_if_changes_made(current_input_dir, new_input_files)
-                if not actions_performed:
-                    logger.info("No changes were made by the Claude agent - using current result as final")
-                    overall_result = {
-                        'schedule': milp_schedule,
-                        'utilization': utilization_df,
-                        'output_dir': str(iteration_dir)
-                    }
-                    self.metrics['final_utilization'] = avg_utilization
-                    break
-                
-                # Update metrics
-                self.metrics['sections_adjusted'] += len(underutilized_sections)
-                
-                # Use the new input files for the next iteration
-                current_input_dir = new_input_files
-                
-            except Exception as e:
-                logger.error(f"Error in iteration {self.iteration + 1}: {str(e)}")
-                logger.info("Using results from last successful iteration")
-                
-                if self.iteration == 0:
-                    # If we fail on the first iteration, we don't have any results yet
-                    raise RuntimeError(f"Failed on first iteration: {str(e)}")
-                else:
-                    # Use the results from the previous iteration
-                    break
-            
-            # Increment iteration counter
-            self.iteration += 1
-            self.metrics['iterations'] = self.iteration + 1
-            
-    def _check_if_changes_made(self, original_dir: Path, new_dir: Path) -> bool:
-        """
-        Check if any changes were made between the original and new input files.
+        Prepare directory for the current iteration.
         
         Args:
-            original_dir: Path to original input directory
-            new_dir: Path to new input directory
+            iteration: Current iteration number
             
         Returns:
-            True if changes were made, False otherwise
+            Path to the iteration directory
         """
-        original_sections = pd.read_csv(original_dir / "Sections_Information.csv")
-        new_sections = pd.read_csv(new_dir / "Sections_Information.csv")
+        iteration_dir = self.iterations_dir / f"iteration_{iteration}"
+        iteration_dir.mkdir(parents=True, exist_ok=True)
         
-        # Simple check - did the number of sections change?
-        if len(original_sections) != len(new_sections):
-            return True
-            
-        # Check if the section IDs changed
-        original_ids = set(original_sections["Section ID"])
-        new_ids = set(new_sections["Section ID"])
+        # Create new_inputs directory for the next iteration
+        new_inputs_dir = iteration_dir / "new_inputs"
+        new_inputs_dir.mkdir(parents=True, exist_ok=True)
         
-        if original_ids != new_ids:
-            return True
-            
-        # No significant changes detected
-        logger.info("No significant changes detected between iterations")
-        return False
-    
-    def run(self) -> Dict[str, Any]:
+        # Create debug directory
+        debug_dir = new_inputs_dir / "debug"
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        
+        return iteration_dir
+
+    def _copy_input_files(self, source_dir: Path, dest_dir: Path):
         """
-        Run the complete optimization pipeline.
-        
-        Returns:
-            Dictionary with optimization results and metrics
-        """
-        start_time = time.time()
-        logger.info("Starting optimization pipeline")
-        
-        # Initial input files are in the input directory
-        current_input_dir = self.input_dir
-        
-        # Continue optimizing until we reach the target utilization or max iterations
-        self.iteration = 0
-        overall_result = None
-        
-        # Main optimization loop
-        while self.iteration < self.max_iterations:
-            logger.info(f"Starting iteration {self.iteration + 1}/{self.max_iterations}")
-            
-            # Create iteration output directory
-            iteration_dir = self.iterations_dir / f"iteration_{self.iteration + 1}"
-            iteration_dir.mkdir(exist_ok=True)
-            
-            try:
-                # Run greedy optimization
-                greedy_start = time.time()
-                greedy_schedule, greedy_optimizer = self._run_greedy_optimization(current_input_dir, iteration_dir)
-                self.metrics['greedy_time'] += time.time() - greedy_start
-                
-                # Run MILP optimization using greedy as warm start
-                milp_start = time.time()
-                milp_schedule = self._run_milp_optimization(
-                    greedy_optimizer.students,
-                    greedy_optimizer.teachers,
-                    greedy_optimizer.sections,
-                    greedy_optimizer.periods,
-                    greedy_optimizer.student_preferences,
-                    greedy_schedule,
-                    iteration_dir
-                )
-                self.metrics['milp_time'] += time.time() - milp_start
-                
-                # Store the last successful iteration data
-                last_success = {
-                    'schedule': milp_schedule,
-                    'utilization': DataConverter.generate_utilization_report(milp_schedule),
-                    'output_dir': str(iteration_dir)
-                }
-                
-                # Check utilization and identify underutilized sections
-                utilization_df = last_success['utilization']
-                underutilized_sections = utilization_df[
-                    utilization_df['Utilization'] < self.utilization_threshold
-                ]
-                
-                # Log details about underutilized sections
-                logger.info(f"Found {len(underutilized_sections)} sections below {self.utilization_threshold*100}% utilization:")
-                for _, row in underutilized_sections.iterrows():
-                    logger.info(f"  - Section {row['Section ID']} ({row['Course ID']}): {row['Utilization']:.2%} utilization ({row['Enrollment']}/{row['Capacity']} students)")
-                
-                # Record metrics for this iteration
-                avg_utilization = utilization_df['Utilization'].mean()
-                if self.iteration == 0:
-                    self.metrics['initial_utilization'] = avg_utilization
-                
-                logger.info(f"Iteration {self.iteration + 1} - Average utilization: {avg_utilization:.2f}")
-                logger.info(f"Found {len(underutilized_sections)} underutilized sections")
-                
-                # If no underutilized sections or reached max iterations, we're done
-                if len(underutilized_sections) == 0 or self.iteration == self.max_iterations - 1:
-                    overall_result = last_success
-                    self.metrics['final_utilization'] = avg_utilization
-                    break
-                
-                # Run Claude agent to adjust underutilized sections
-                agent_start = time.time()
-                new_input_files = self._run_claude_agent(
-                    milp_schedule, 
-                    underutilized_sections, 
-                    current_input_dir,
-                    iteration_dir
-                )
-                self.metrics['agent_time'] += time.time() - agent_start
-                
-                # Check if any actions were actually performed
-                actions_performed = self._check_if_changes_made(current_input_dir, new_input_files)
-                if not actions_performed:
-                    logger.info("No changes were made by the Claude agent - using current result as final")
-                    overall_result = last_success
-                    self.metrics['final_utilization'] = avg_utilization
-                    break
-                
-                # Update metrics
-                self.metrics['sections_adjusted'] += len(underutilized_sections)
-                
-                # Use the new input files for the next iteration
-                current_input_dir = new_input_files
-                
-            except Exception as e:
-                logger.error(f"Error in iteration {self.iteration + 1}: {str(e)}")
-                logger.info("Using results from last successful iteration")
-                
-                if self.iteration == 0:
-                    # If we fail on the first iteration, we don't have any results yet
-                    raise RuntimeError(f"Failed on first iteration: {str(e)}")
-                else:
-                    # Use the results from the previous iteration
-                    overall_result = last_success
-                    break
-            
-            # Increment iteration counter
-            self.iteration += 1
-            self.metrics['iterations'] = self.iteration + 1
-        
-        # Save final outputs
-        final_output_dir = self.output_dir / "final"
-        final_output_dir.mkdir(exist_ok=True)
-        
-        # Copy final files if we have them
-        if overall_result:
-            self._save_final_results(overall_result['schedule'], overall_result['utilization'], final_output_dir)
-        
-        # Calculate total time
-        self.metrics['total_time'] = time.time() - start_time
-        
-        # Create final results
-        results = {
-            'success': True,
-            'output_dir': str(final_output_dir),
-            'metrics': self.metrics,
-            'iterations': self.iteration + 1
-        }
-        
-        logger.info(f"Optimization pipeline completed in {self.metrics['total_time']:.2f} seconds")
-        logger.info(f"Initial utilization: {self.metrics['initial_utilization']:.2f}, "
-                    f"Final utilization: {self.metrics['final_utilization']:.2f}")
-        
-        # Save metrics to file
-        with open(self.output_dir / "metrics.json", "w") as f:
-            json.dump(self.metrics, f, indent=2)
-        
-        return results
-    
-    def _run_greedy_optimization(self, input_dir: Path, output_dir: Path) -> Tuple[Schedule, GreedyOptimizer]:
-        """
-        Run the greedy optimization algorithm.
+        Copy input CSV files to the destination directory.
         
         Args:
-            input_dir: Directory containing input files
-            output_dir: Directory to save output files
-            
-        Returns:
-            Tuple of (Schedule object, GreedyOptimizer instance)
+            source_dir: Source directory containing input files
+            dest_dir: Destination directory
         """
-        logger.info(f"Running greedy optimization with input from {input_dir}")
+        # Ensure destination directory exists
+        dest_dir.mkdir(parents=True, exist_ok=True)
         
-        # Initialize optimizer with input files
-        optimizer = ScheduleOptimizer(input_dir, output_dir)
-        
-        # Load and convert data
-        data = optimizer.load_data()
-        domain_data = optimizer.convert_data(data)
-        
-        # Create the greedy optimizer
-        greedy_optimizer = GreedyOptimizer(
-            students=domain_data['students'],
-            teachers=domain_data['teachers'],
-            sections=domain_data['sections'],
-            periods=domain_data['periods'],
-            student_preferences=domain_data['student_preferences']
-        )
-        
-        # Run greedy optimization
-        schedule = greedy_optimizer.optimize()
-        
-        # Save the warm start results
-        optimizer.save_results(schedule)
-        
-        logger.info(f"Greedy optimization complete - scheduled {len([s for s in schedule.sections.values() if s.is_scheduled])}/{len(schedule.sections)} sections")
-        
-        return schedule, greedy_optimizer
-    
-    def _run_milp_optimization(self, 
-                              students: Dict, 
-                              teachers: Dict, 
-                              sections: Dict, 
-                              periods: Dict, 
-                              student_preferences: Dict,
-                              warm_start: Schedule,
-                              output_dir: Path) -> Schedule:
-        """
-        Run the MILP optimization algorithm using the greedy solution as a warm start.
-        
-        Args:
-            students: Dictionary of students
-            teachers: Dictionary of teachers
-            sections: Dictionary of sections
-            periods: Dictionary of periods
-            student_preferences: Dictionary of student preferences
-            warm_start: Schedule from greedy optimization to use as warm start
-            output_dir: Directory to save output files
-            
-        Returns:
-            Optimized Schedule object
-        """
-        logger.info("Running MILP optimization with warm start from greedy algorithm")
-        
-        try:
-            # Create the MILP optimizer with warm start from greedy
-            milp_optimizer = MILPOptimizer(
-                students=students,
-                teachers=teachers,
-                sections=sections,
-                periods=periods,
-                student_preferences=student_preferences,
-                warm_start=warm_start,  # Use greedy solution as warm start
-                time_limit_seconds=900  # 15 minutes max
-            )
-            
-            # Run MILP optimization
-            schedule = milp_optimizer.optimize()
-            
-            # Verify we got a valid solution (should have at least one scheduled section)
-            scheduled_sections = [s for s in schedule.sections.values() if s.is_scheduled]
-            if not scheduled_sections:
-                logger.warning("MILP optimization returned no scheduled sections")
-                logger.info("Falling back to greedy solution")
-                schedule = warm_start
-            else:
-                logger.info(f"MILP optimization successfully scheduled {len(scheduled_sections)} sections")
-                
-        except gp.GurobiError as e:
-            logger.warning(f"MILP optimization failed with Gurobi error: {str(e)}")
-            logger.info("Falling back to greedy solution")
-            schedule = warm_start
-        except Exception as e:
-            logger.warning(f"MILP optimization failed with unexpected error: {str(e)}")
-            import traceback
-            logger.debug(f"Stack trace: {traceback.format_exc()}")
-            logger.info("Falling back to greedy solution")
-            schedule = warm_start
-        
-        # Save results (either from MILP or greedy if MILP failed)
-        converter = DataConverter()
-        
-        # Convert schedule to DataFrames
-        master_schedule_df = converter.convert_to_master_schedule_df(schedule)
-        student_assignments_df = converter.convert_to_student_assignments_df(schedule)
-        teacher_schedule_df = converter.convert_to_teacher_schedule_df(schedule)
-        utilization_report_df = converter.generate_utilization_report(schedule)
-        
-        # Define output file paths
-        output_files = {
-            'master_schedule': str(output_dir / 'Master_Schedule.csv'),
-            'student_assignments': str(output_dir / 'Student_Assignments.csv'),
-            'teacher_schedule': str(output_dir / 'Teacher_Schedule.csv'),
-            'utilization_report': str(output_dir / 'Utilization_Report.csv')
-        }
-        
-        # Save DataFrames to CSV files
-        master_schedule_df.to_csv(output_files['master_schedule'], index=False)
-        student_assignments_df.to_csv(output_files['student_assignments'], index=False)
-        teacher_schedule_df.to_csv(output_files['teacher_schedule'], index=False)
-        utilization_report_df.to_csv(output_files['utilization_report'], index=False)
-        
-        logger.info(f"Optimization complete - scheduled {len([s for s in schedule.sections.values() if s.is_scheduled])}/{len(schedule.sections)} sections")
-        
-        return schedule
-    
-    def _run_claude_agent(self, 
-                         schedule: Schedule, 
-                         underutilized_sections: pd.DataFrame, 
-                         input_dir: Path,
-                         output_dir: Path) -> Path:
-        """
-        Run the Claude agent to optimize underutilized sections.
-        
-        Args:
-            schedule: Current schedule
-            underutilized_sections: DataFrame of sections below utilization threshold
-            input_dir: Directory containing current input files
-            output_dir: Directory to save output files
-            
-        Returns:
-            Path to directory with new input files
-        """
-        logger.info(f"Running Claude agent for {len(underutilized_sections)} underutilized sections")
-        
-        # Create a prompt for Claude with the underutilized sections
-        prompt = self._create_claude_prompt(schedule, underutilized_sections, input_dir)
-        
-        # Call Claude API
-        response = self._call_claude_api(prompt)
-        
-        # Process Claude's response to generate new input files
-        new_input_dir = output_dir / "new_inputs"
-        new_input_dir.mkdir(exist_ok=True)
-        
-        # Parse Claude's response
-        actions = self._parse_claude_response(response)
-        
-        # Apply the actions to generate new input files
-        self._apply_schedule_actions(schedule, actions, input_dir, new_input_dir)
-        
-        logger.info(f"Claude agent complete - generated new input files in {new_input_dir}")
-        
-        return new_input_dir
-    
-    def _create_claude_prompt(self, schedule: Schedule, 
-                            underutilized_sections: pd.DataFrame, 
-                            input_dir: Path) -> str:
-        """
-        Create a prompt for Claude with the current schedule state and underutilized sections.
-        
-        Args:
-            schedule: Current schedule
-            underutilized_sections: DataFrame of sections below utilization threshold
-            input_dir: Directory containing current input files
-            
-        Returns:
-            Prompt string for Claude
-        """
-        # Read the current input files to include in the prompt
-        sections_df = pd.read_csv(input_dir / "Sections_Information.csv")
-        students_df = pd.read_csv(input_dir / "Student_Info.csv")
-        preferences_df = pd.read_csv(input_dir / "Student_Preference_Info.csv")
-        
-        # Format the underutilized sections data
-        underutilized_str = underutilized_sections.to_string(index=False)
-        
-        # Format the schedule summary
-        schedule_summary = {
-            'total_sections': len(schedule.sections),
-            'scheduled_sections': len([s for s in schedule.sections.values() if s.is_scheduled]),
-            'total_assignments': len(schedule.assignments),
-            'total_students': len(set(a.student_id for a in schedule.assignments))
-        }
-        
-        # Create the prompt
-        prompt = f"""
-        You are an AI registrar assistant helping optimize a school schedule. We have identified underutilized sections 
-        (below {self.utilization_threshold*100}% capacity) that need adjustment. For each underutilized section, 
-        recommend ONE of the following actions:
-        
-        1. SPLIT: Divide a section into two smaller sections
-        2. ADD: Create a new section to meet demand
-        3. REMOVE: Remove the section if there's not enough demand
-        4. MERGE: Combine with another section (specify which one)
-        
-        Current Schedule Summary:
-        - Total Sections: {schedule_summary['total_sections']}
-        - Scheduled Sections: {schedule_summary['scheduled_sections']}
-        - Total Student Assignments: {schedule_summary['total_assignments']}
-        - Total Students: {schedule_summary['total_students']}
-        
-        Underutilized Sections:
-        {underutilized_str}
-        
-        Please analyze each underutilized section and recommend what action to take.
-        Format your response as a JSON list of actions. For example:
-        
-        [
-          {{
-            "section_id": "S001",
-            "action": "MERGE",
-            "merge_with": "S002",
-            "reason": "Both sections have low enrollment and compatible schedules"
-          }},
-          {{
-            "section_id": "S003",
-            "action": "REMOVE",
-            "reason": "Very low enrollment with alternative sections available"
-          }}
+        # List of input file names
+        input_files = [
+            "Period.csv",
+            "Sections_Information.csv", 
+            "Student_Info.csv",
+            "Student_Preference_Info.csv",
+            "Teacher_Info.csv",
+            "Teacher_unavailability.csv"
         ]
         
-        Provide detailed reasoning for each recommendation, considering student preferences, 
-        teacher availability, and overall schedule optimization.
-        """
-        
-        return prompt
-    
-    def _call_claude_api(self, prompt: str) -> str:
-        """
-        Call the Claude API with the given prompt.
-        
-        Args:
-            prompt: The prompt to send to Claude
-            
-        Returns:
-            Claude's response text
-        """
-        logger.info("Calling Claude API")
-        
-        # Try to make a real call to the Claude API
-        try:
-            # Configure API request
-            headers = {
-                "x-api-key": CLAUDE_API_KEY,
-                "Content-Type": "application/json",
-                "anthropic-version": "2023-06-01"
-            }
-            
-            payload = {
-                "model": "claude-3-sonnet-20240229",  # Use Sonnet for better cost efficiency
-                "max_tokens": 2000,
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ]
-            }
-            
-            # Make the API call
-            try:
-                import requests
-                response = requests.post(CLAUDE_API_URL, json=payload, headers=headers)
-                
-                if response.status_code == 200:
-                    response_data = response.json()
-                    claude_response = response_data["content"][0]["text"]
-                    logger.info("Successfully received response from Claude API")
-                    return claude_response
-                else:
-                    logger.error(f"Claude API error: {response.status_code} - {response.text}")
-            except Exception as e:
-                logger.warning(f"Error making Claude API request: {str(e)}")
-        except Exception as e:
-            logger.warning(f"Error preparing Claude API call: {str(e)}")
-        
-        # If we get here, the API call failed - use fallback logic
-        logger.info("Using fallback section adjustment logic")
-        
-        # Get the actual underutilized sections from the data
-        underutilized_section_ids = underutilized_sections["Section ID"].tolist()
-        if not underutilized_section_ids:
-            logger.warning("No underutilized sections found to adjust")
-            return "[]"  # Return empty JSON array if no sections to adjust
-            
-        # Create intelligent fallback logic based on actual underutilized sections
-        actions = []
-        
-        # First, read in all the CSV data to make intelligent decisions
-        try:
-            sections_df = pd.read_csv(current_input_dir / "Sections_Information.csv")
-            teachers_df = pd.read_csv(current_input_dir / "Teacher_Info.csv")
-            
-            # Count how many sections each teacher is assigned to
-            teacher_section_counts = {}
-            for _, row in sections_df.iterrows():
-                teacher_id = row["Teacher Assigned"]
-                teacher_section_counts[teacher_id] = teacher_section_counts.get(teacher_id, 0) + 1
-                
-            # Map teachers to the courses they teach
-            teacher_courses = {}
-            for _, row in sections_df.iterrows():
-                teacher_id = row["Teacher Assigned"]
-                course_id = row["Course ID"]
-                if teacher_id not in teacher_courses:
-                    teacher_courses[teacher_id] = set()
-                teacher_courses[teacher_id].add(course_id)
-                
-            # Find sections that need merging (similar sections with low enrollment)
-            mergeable_sections = {}
-            for course_id in sections_df["Course ID"].unique():
-                course_sections = sections_df[sections_df["Course ID"] == course_id]
-                if len(course_sections) >= 2:  # Need at least 2 sections to merge
-                    # Find underutilized sections of this course
-                    course_low_util = [
-                        section_id for section_id in underutilized_section_ids 
-                        if section_id in course_sections["Section ID"].values
-                    ]
-                    if len(course_low_util) >= 2:
-                        mergeable_sections[course_id] = course_low_util
-                        
-            # For each underutilized section, determine the best action
-            for section_id in underutilized_section_ids[:3]:  # Limit to first 3 to avoid too many changes
-                section_row = underutilized_sections[underutilized_sections["Section ID"] == section_id].iloc[0]
-                section_data = sections_df[sections_df["Section ID"] == section_id].iloc[0]
-                utilization = section_row["Utilization"]
-                course_id = section_row["Course ID"]
-                enrollment = section_row["Enrollment"]
-                capacity = section_row["Capacity"]
-                teacher_id = section_data["Teacher Assigned"]
-                department = section_data["Department"]
-                
-                # Check if current size is outside the optimal range
-                if capacity > 35:
-                    # Section is too large, should be split
-                    # Find another teacher who teaches this course or in this department
-                    potential_teachers = []
-                    for tid, courses in teacher_courses.items():
-                        if tid != teacher_id and (
-                            course_id in courses or  # Already teaches this course
-                            (tid in teachers_df["Teacher ID"].values and  # In same department
-                             teachers_df[teachers_df["Teacher ID"] == tid]["Department"].iloc[0] == department)
-                        ):
-                            # Check if this teacher has 5 or fewer sections
-                            if teacher_section_counts.get(tid, 0) <= 5:
-                                potential_teachers.append(tid)
-                                
-                    if potential_teachers:
-                        # Split into two sections of reasonable size
-                        actions.append({
-                            "section_id": section_id,
-                            "action": "SPLIT",
-                            "reason": f"Section is too large ({capacity} seats). Splitting to optimize class size."
-                        })
-                        continue
-                
-                # Very low enrollment and utilization
-                if enrollment < 15 and utilization < 0.4:
-                    # Check if we can merge with another section
-                    if course_id in mergeable_sections and len(mergeable_sections[course_id]) >= 2:
-                        merge_candidates = [s for s in mergeable_sections[course_id] if s != section_id]
-                        if merge_candidates:
-                            merge_with = merge_candidates[0]
-                            actions.append({
-                                "section_id": section_id,
-                                "action": "MERGE",
-                                "merge_with": merge_with,
-                                "reason": f"Both sections have low enrollment and can be combined to optimize resources."
-                            })
-                            # Remove the used section from candidates
-                            mergeable_sections[course_id].remove(merge_with)
-                            continue
-                    
-                    # If not mergeable and very low enrollment, remove it
-                    # But protect special courses unless extremely low enrollment
-                    if course_id not in ["Medical Career", "Heroes Teach"] or enrollment < 5:
-                        actions.append({
-                            "section_id": section_id,
-                            "action": "REMOVE",
-                            "reason": f"Section has very low enrollment ({enrollment}) and utilization ({utilization:.1%})."
-                        })
-                        continue
-                
-                # For sections with moderate demand but still under threshold
-                if 0.5 <= utilization < 0.75 and enrollment >= 15:
-                    # Check if there's high overall demand for this course
-                    course_sections = sections_df[sections_df["Course ID"] == course_id]
-                    course_section_ids = course_sections["Section ID"].tolist()
-                    
-                    # Check if other sections of this course are highly utilized
-                    other_sections_highly_utilized = False
-                    for other_id in course_section_ids:
-                        if other_id != section_id and other_id in utilization_df["Section ID"].values:
-                            other_util = utilization_df[utilization_df["Section ID"] == other_id]["Utilization"].iloc[0]
-                            if other_util > 0.9:  # Other section is nearly full
-                                other_sections_highly_utilized = True
-                                break
-                                
-                    if other_sections_highly_utilized:
-                        # Find a teacher who can teach another section
-                        potential_teachers = []
-                        for tid, courses in teacher_courses.items():
-                            if course_id in courses and teacher_section_counts.get(tid, 0) <= 5:
-                                potential_teachers.append(tid)
-                                
-                        if potential_teachers:
-                            # Add a new section to meet demand
-                            actions.append({
-                                "section_id": section_id,
-                                "action": "ADD",
-                                "reason": f"High demand for {course_id} with other sections nearly full. Adding a new section."
-                            })
-                            continue
-                            
-                # If we get here, no specific action needed for this section
-                logger.info(f"No specific action needed for section {section_id} with utilization {utilization:.1%}")
-                
-        except Exception as e:
-            logger.error(f"Error analyzing sections for adjustment: {str(e)}")
-            # Fallback to basic removal of very underutilized sections
-            for section_id in underutilized_section_ids[:2]:
-                section_row = underutilized_sections[underutilized_sections["Section ID"] == section_id].iloc[0]
-                utilization = section_row["Utilization"]
-                if utilization < 0.3:
-                    actions.append({
-                        "section_id": section_id,
-                        "action": "REMOVE",
-                        "reason": f"Section has very low utilization ({utilization:.1%})."
-                    })
-            
-        # Convert actions to JSON string
-        simulated_response = f"""
-        I've analyzed the underutilized sections and here are my recommendations:
-        
-        {json.dumps(actions, indent=2)}
-        """
-        
-        logger.info(f"Generated fallback response with {len(actions)} actions")
-        
-        return simulated_response
-    
-    def _parse_claude_response(self, response: str) -> List[Dict[str, Any]]:
-        """
-        Parse Claude's response to extract the recommended actions.
-        
-        Args:
-            response: Claude's response text
-            
-        Returns:
-            List of action dictionaries
-        """
-        logger.info("Parsing Claude response")
-        
-        # Find JSON block - in a real implementation, you'd use proper JSON extraction
-        try:
-            # Look for text between square brackets
-            start_idx = response.find("[")
-            end_idx = response.rfind("]") + 1
-            
-            if start_idx >= 0 and end_idx > start_idx:
-                json_str = response[start_idx:end_idx]
-                actions = json.loads(json_str)
-                return actions
+        # Copy each file if it exists
+        for filename in input_files:
+            source_file = source_dir / filename
+            if source_file.exists():
+                shutil.copy2(source_file, dest_dir / filename)
+                logger.info(f"Copied {filename} to {dest_dir}")
             else:
-                logger.error("Could not find JSON block in Claude response")
-                return []
-        except json.JSONDecodeError:
-            logger.error("Could not parse JSON from Claude response")
-            return []
-    
-    def _apply_schedule_actions(self, 
-                              schedule: Schedule, 
-                              actions: List[Dict[str, Any]], 
-                              input_dir: Path, 
-                              output_dir: Path) -> None:
+                logger.warning(f"Input file {filename} not found in {source_dir}")
+
+    def _get_section_utilization(self, student_assignments: pd.DataFrame, 
+                                sections: pd.DataFrame) -> Dict[str, float]:
         """
-        Apply the actions recommended by Claude to generate new input files.
+        Calculate the utilization of each section.
         
         Args:
-            schedule: Current schedule
-            actions: List of actions from Claude
-            input_dir: Directory containing current input files
-            output_dir: Directory to save new input files
+            student_assignments: DataFrame with student assignments
+            sections: DataFrame with section information
+            
+        Returns:
+            Dictionary mapping section IDs to utilization ratios
         """
-        logger.info(f"Applying {len(actions)} schedule actions")
+        section_counts = student_assignments.groupby('Section ID').size()
+        section_capacities = sections.set_index('Section ID')['# of Seats Available']
         
-        # Read original input files
-        sections_df = pd.read_csv(input_dir / "Sections_Information.csv")
-        students_df = pd.read_csv(input_dir / "Student_Info.csv")
-        preferences_df = pd.read_csv(input_dir / "Student_Preference_Info.csv")
-        teachers_df = pd.read_csv(input_dir / "Teacher_Info.csv")
-        periods_df = pd.read_csv(input_dir / "Period.csv")
-        
-        # Process each action
-        for action in actions:
-            section_id = action["section_id"]
-            action_type = action["action"]
+        utilization = {}
+        for section_id in sections['Section ID']:
+            enrolled = section_counts.get(section_id, 0)
+            capacity = section_capacities.get(section_id, 1)  # Default to 1 to avoid division by zero
+            utilization[section_id] = enrolled / capacity
             
-            if action_type == "MERGE":
-                # Merge two sections
-                merge_with = action["merge_with"]
-                self._merge_sections(sections_df, preferences_df, section_id, merge_with)
-            elif action_type == "REMOVE":
-                # Remove a section
-                self._remove_section(sections_df, preferences_df, section_id)
-            elif action_type == "SPLIT":
-                # Split a section into two
-                self._split_section(sections_df, teachers_df, section_id)
-            elif action_type == "ADD":
-                # Add a new section
-                self._add_section(sections_df, teachers_df, section_id)
-        
-        # Save the modified input files
-        sections_df.to_csv(output_dir / "Sections_Information.csv", index=False)
-        students_df.to_csv(output_dir / "Student_Info.csv", index=False)
-        preferences_df.to_csv(output_dir / "Student_Preference_Info.csv", index=False)
-        teachers_df.to_csv(output_dir / "Teacher_Info.csv", index=False)
-        periods_df.to_csv(output_dir / "Period.csv", index=False)
-        
-        # Copy any other files from input_dir to output_dir
-        for file_path in input_dir.glob("*.csv"):
-            if file_path.name not in ["Sections_Information.csv", "Student_Info.csv", 
-                                     "Student_Preference_Info.csv", "Teacher_Info.csv", 
-                                     "Period.csv"]:
-                output_file = output_dir / file_path.name
-                if not output_file.exists():
-                    with open(file_path, "rb") as src, open(output_file, "wb") as dst:
-                        dst.write(src.read())
-    
-    def _merge_sections(self, sections_df: pd.DataFrame, preferences_df: pd.DataFrame, 
-                      section_id1: str, section_id2: str) -> None:
-        """Merge two sections into one"""
-        # Check if both sections exist
-        if not any(sections_df["Section ID"] == section_id1):
-            logger.warning(f"Section {section_id1} not found in sections DataFrame")
-            return
-        
-        if not any(sections_df["Section ID"] == section_id2):
-            logger.warning(f"Section {section_id2} not found in sections DataFrame")
-            return
-            
-        # Get section information
-        section1 = sections_df[sections_df["Section ID"] == section_id1].iloc[0]
-        section2 = sections_df[sections_df["Section ID"] == section_id2].iloc[0]
-        
-        # Verify they are the same course
-        if section1["Course ID"] != section2["Course ID"]:
-            logger.warning(f"Cannot merge sections with different courses: {section_id1}, {section_id2}")
-            return
-            
-        # Calculate total enrollment (assuming we're merging because both are under-enrolled)
-        # Ensure the merged section isn't too large (max 35 students)
-        total_capacity = section1["# of Seats Available"] + section2["# of Seats Available"]
-        if total_capacity > 35:
-            # Cap at 35
-            logger.info(f"Capping merged section capacity at 35 (from original {total_capacity})")
-            total_capacity = 35
-        
-        # Update section capacity
-        sections_df.loc[sections_df["Section ID"] == section_id1, "# of Seats Available"] = total_capacity
-        
-        # Remove the second section
-        sections_df.drop(sections_df[sections_df["Section ID"] == section_id2].index, inplace=True)
-        
-        # Update student preferences
-        for idx, row in preferences_df.iterrows():
-            if pd.notna(row["Preferred Sections"]):
-                sections = row["Preferred Sections"].split(";")
-                if section_id2 in sections:
-                    sections.remove(section_id2)
-                    if section_id1 not in sections:
-                        sections.append(section_id1)
-                    preferences_df.loc[idx, "Preferred Sections"] = ";".join(sections)
-                    
-        logger.info(f"Merged sections {section_id1} and {section_id2} with new capacity {total_capacity}")
-    
-    def _remove_section(self, sections_df: pd.DataFrame, preferences_df: pd.DataFrame, 
-                       section_id: str) -> None:
-        """Remove a section"""
-        # Check if section exists
-        if not any(sections_df["Section ID"] == section_id):
-            logger.warning(f"Section {section_id} not found in sections DataFrame")
-            return
-            
-        # Get section information before removing
-        section = sections_df[sections_df["Section ID"] == section_id].iloc[0]
-        course_id = section["Course ID"]
-        teacher_id = section["Teacher Assigned"]
-        
-        # Count how many sections this teacher has
-        teacher_section_count = len(sections_df[sections_df["Teacher Assigned"] == teacher_id])
-        
-        # Don't remove if this is the teacher's only section
-        if teacher_section_count <= 1:
-            logger.warning(f"Cannot remove section {section_id} - it's the only section for teacher {teacher_id}")
-            return
-            
-        # Also count how many sections exist for this course
-        course_section_count = len(sections_df[sections_df["Course ID"] == course_id])
-        
-        # Don't remove if this is the only section for this course
-        if course_section_count <= 1:
-            logger.warning(f"Cannot remove section {section_id} - it's the only section for course {course_id}")
-            return
-        
-        # Remove the section
-        sections_df.drop(sections_df[sections_df["Section ID"] == section_id].index, inplace=True)
-        
-        # Update student preferences
-        for idx, row in preferences_df.iterrows():
-            if pd.notna(row["Preferred Sections"]):
-                sections = row["Preferred Sections"].split(";")
-                if section_id in sections:
-                    sections.remove(section_id)
-                    preferences_df.loc[idx, "Preferred Sections"] = ";".join(sections)
-                    
-        logger.info(f"Removed section {section_id} for course {course_id}")
-    
-    def _split_section(self, sections_df: pd.DataFrame, teachers_df: pd.DataFrame, 
-                      section_id: str) -> None:
-        """Split a section into two"""
-        # Check if section exists
-        if not any(sections_df["Section ID"] == section_id):
-            logger.warning(f"Section {section_id} not found in sections DataFrame")
-            return
-            
-        # Get section information
-        section = sections_df[sections_df["Section ID"] == section_id].iloc[0]
-        original_capacity = section["# of Seats Available"]
-        
-        # Verify the section is actually large enough to split
-        if original_capacity <= 30:
-            logger.warning(f"Section {section_id} capacity ({original_capacity}) is not large enough to split")
-            return
-            
-        # Determine capacities for the two sections
-        # If original capacity is odd, give the extra seat to the original section
-        new_capacity1 = original_capacity // 2 + (original_capacity % 2)  
-        new_capacity2 = original_capacity // 2
-        
-        # Ensure both sections have at least 15 seats
-        if new_capacity1 < 15 or new_capacity2 < 15:
-            logger.warning(f"Cannot split section {section_id} - resulting sections would be too small")
-            return
-            
-        # Create a new section ID based on sequential numbering
-        # Extract all section numbers
-        section_numbers = []
-        for s in sections_df["Section ID"]:
-            if s.startswith("S"):
-                # Remove the 'S' prefix and take only digits before any underscore
-                base = s[1:].split('_')[0]
-                try:
-                    section_numbers.append(int(base))
-                except ValueError:
-                    # Skip if we can't convert to integer
-                    pass
-                
-        # Generate new section ID
-        new_section_num = max(section_numbers) + 1 if section_numbers else 1
-        new_section_id = f"S{new_section_num:03d}"
-        
-        # Count sections per teacher
-        teacher_counts = sections_df.groupby("Teacher Assigned").size().to_dict()
-        
-        # Find a teacher who:
-        # 1. Is qualified to teach this course (already teaches it)
-        # 2. Has fewer than 6 classes
-        # 3. Is in the same department
-        
-        current_teacher = section["Teacher Assigned"]
-        course_id = section["Course ID"]
-        department = section["Department"]
-        
-        # Find teachers who teach this course
-        qualified_teachers = sections_df[sections_df["Course ID"] == course_id]["Teacher Assigned"].unique()
-        
-        # Find teachers in the same department
-        dept_teachers = teachers_df[teachers_df["Department"] == department]["Teacher ID"].unique()
-        
-        # Prioritize teachers already teaching this course
-        potential_teachers = []
-        for teacher in qualified_teachers:
-            if teacher != current_teacher and teacher_counts.get(teacher, 0) < 6:
-                potential_teachers.append(teacher)
-                
-        # If no qualified teachers, look at department teachers
-        if not potential_teachers:
-            for teacher in dept_teachers:
-                if teacher != current_teacher and teacher_counts.get(teacher, 0) < 6:
-                    potential_teachers.append(teacher)
-        
-        # If still no teachers, use current teacher (if they have fewer than 6 classes)
-        if not potential_teachers and teacher_counts.get(current_teacher, 0) < 6:
-            new_teacher = current_teacher
-        elif potential_teachers:
-            new_teacher = potential_teachers[0]
-        else:
-            logger.warning(f"Cannot find teacher for new section when splitting {section_id}")
-            return
-        
-        # Update original section capacity
-        sections_df.loc[sections_df["Section ID"] == section_id, "# of Seats Available"] = new_capacity1
-        
-        # Create new section with copied data but new capacity
-        new_row = section.copy()
-        new_row["Section ID"] = new_section_id
-        new_row["# of Seats Available"] = new_capacity2
-        new_row["Teacher Assigned"] = new_teacher
-        
-        # Add the new section to the DataFrame
-        sections_df.loc[len(sections_df)] = new_row
-        
-        logger.info(f"Split section {section_id} into two sections: {section_id} ({new_capacity1} seats) and {new_section_id} ({new_capacity2} seats)")
-    
-    def _add_section(self, sections_df: pd.DataFrame, teachers_df: pd.DataFrame, 
-                    section_id: str) -> None:
-        """Add a new section based on an existing one"""
-        # Check if section exists
-        if not any(sections_df["Section ID"] == section_id):
-            logger.warning(f"Section {section_id} not found in sections DataFrame")
-            return
-            
-        # Get section information
-        section = sections_df[sections_df["Section ID"] == section_id].iloc[0]
-        course_id = section["Course ID"]
-        department = section["Department"]
-        
-        # Create a new section ID (find the highest current section number and increment)
-        section_numbers = []
-        for s in sections_df["Section ID"]:
-            if s.startswith("S"):
-                # Remove the 'S' prefix and take only digits before any underscore
-                base = s[1:].split('_')[0]
-                try:
-                    section_numbers.append(int(base))
-                except ValueError:
-                    # Skip if we can't convert to integer
-                    pass
-                
-        new_section_num = max(section_numbers) + 1 if section_numbers else 1
-        new_section_id = f"S{new_section_num:03d}"
-        
-        # Count sections per teacher
-        teacher_counts = sections_df.groupby("Teacher Assigned").size().to_dict()
-        
-        # Find teachers who already teach this course
-        qualified_teachers = sections_df[sections_df["Course ID"] == course_id]["Teacher Assigned"].unique()
-        
-        # Find potential teachers who:
-        # 1. Already teach this course
-        # 2. Have fewer than 6 sections
-        potential_teachers = []
-        for teacher in qualified_teachers:
-            if teacher_counts.get(teacher, 0) < 6:
-                potential_teachers.append(teacher)
-                
-        if not potential_teachers:
-            # Find teachers in same department with fewer than 6 sections
-            dept_teachers = teachers_df[teachers_df["Department"] == department]["Teacher ID"].unique()
-            for teacher in dept_teachers:
-                if teacher_counts.get(teacher, 0) < 6:
-                    potential_teachers.append(teacher)
-                    
-        if not potential_teachers:
-            logger.warning(f"Cannot find teacher for new section of {course_id}")
-            return
-            
-        # Set capacity based on department norms
-        if department == "Special":
-            capacity = 15
-        elif department == "PE":
-            capacity = 35
-        elif department == "Science":
-            capacity = 30
-        else:  
-            capacity = 25  # Default for other departments
-        
-        # Create new section with appropriate capacity
-        new_row = section.copy()
-        new_row["Section ID"] = new_section_id
-        new_row["# of Seats Available"] = capacity
-        new_row["Teacher Assigned"] = potential_teachers[0]
-        
-        # Add the new section to the original DataFrame directly
-        sections_df.loc[len(sections_df)] = new_row
-        
-        logger.info(f"Added new section {new_section_id} for course {course_id} with capacity {capacity}, assigned to teacher {potential_teachers[0]}")
-    
-    def _save_final_results(self, schedule: Schedule, utilization_df: pd.DataFrame, output_dir: Path) -> None:
+        return utilization
+
+    def _check_utilization_target(self, utilization: Dict[str, float]) -> bool:
         """
-        Save the final results of the optimization.
+        Check if all sections meet the utilization target.
         
         Args:
-            schedule: Final schedule
-            utilization_df: Utilization report DataFrame
-            output_dir: Directory to save final output files
+            utilization: Dictionary mapping section IDs to utilization ratios
+            
+        Returns:
+            True if all sections meet the target, False otherwise
         """
-        # Save schedule files
-        converter = DataConverter()
-        
-        # Convert schedule to DataFrames
-        master_schedule_df = converter.convert_to_master_schedule_df(schedule)
-        student_assignments_df = converter.convert_to_student_assignments_df(schedule)
-        teacher_schedule_df = converter.convert_to_teacher_schedule_df(schedule)
-        
-        # Save DataFrames to CSV files
-        master_schedule_df.to_csv(output_dir / "Master_Schedule.csv", index=False)
-        student_assignments_df.to_csv(output_dir / "Student_Assignments.csv", index=False)
-        teacher_schedule_df.to_csv(output_dir / "Teacher_Schedule.csv", index=False)
-        utilization_df.to_csv(output_dir / "Utilization_Report.csv", index=False)
-        
-        # Create a summary report
-        summary = {
-            'total_sections': len(schedule.sections),
-            'scheduled_sections': len([s for s in schedule.sections.values() if s.is_scheduled]),
-            'total_assignments': len(schedule.assignments),
-            'total_students': len(set(a.student_id for a in schedule.assignments)),
-            'average_utilization': utilization_df['Utilization'].mean(),
-            'min_utilization': utilization_df['Utilization'].min(),
-            'max_utilization': utilization_df['Utilization'].max(),
-            'underutilized_sections': len(utilization_df[utilization_df['Utilization'] < self.utilization_threshold]),
-            'iterations': self.iteration + 1,
-            'total_time': self.metrics['total_time']
+        below_threshold = {
+            section_id: util 
+            for section_id, util in utilization.items() 
+            if util < self.utilization_threshold
         }
         
-        # Save summary to JSON file
-        with open(output_dir / "summary.json", "w") as f:
-            json.dump(summary, f, indent=2)
-        
-        # Save HTML dashboard
-        self._create_html_dashboard(schedule, utilization_df, summary, output_dir)
-    
-    def _create_html_dashboard(self, schedule: Schedule, utilization_df: pd.DataFrame, 
-                             summary: Dict[str, Any], output_dir: Path) -> None:
+        if below_threshold:
+            logger.info(f"{len(below_threshold)} sections below utilization threshold:")
+            for section_id, util in below_threshold.items():
+                logger.info(f"  {section_id}: {util:.2%}")
+            return False
+        else:
+            logger.info("All sections meet utilization target!")
+            return True
+
+    def _create_dashboard(self, final_dir: Path, metrics: Dict):
         """
-        Create an HTML dashboard with optimization results.
+        Create an HTML dashboard with visualization of results.
         
         Args:
-            schedule: Final schedule
-            utilization_df: Utilization report DataFrame
-            summary: Summary statistics
-            output_dir: Directory to save the dashboard
+            final_dir: Directory containing final results
+            metrics: Performance metrics dictionary
         """
-        # Simple HTML template for the dashboard
-        html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>School Schedule Optimization Results</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; }}
-                .container {{ max-width: 1200px; margin: 0 auto; }}
-                .card {{ background: #f9f9f9; border-radius: 5px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
-                .metric {{ display: inline-block; margin: 10px; padding: 15px; background: #fff; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); min-width: 200px; }}
-                .metric h3 {{ margin-top: 0; color: #333; }}
-                .metric p {{ font-size: 24px; font-weight: bold; margin: 0; color: #0066cc; }}
-                table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
-                th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }}
-                th {{ background-color: #f2f2f2; }}
-                .chart {{ width: 100%; height: 300px; margin-top: 20px; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>School Schedule Optimization Dashboard</h1>
-                
-                <div class="card">
-                    <h2>Summary</h2>
-                    <div class="metric">
-                        <h3>Total Sections</h3>
-                        <p>{summary['total_sections']}</p>
+        try:
+            # Load final data
+            master_schedule = pd.read_csv(final_dir / "Master_Schedule.csv")
+            student_assignments = pd.read_csv(final_dir / "Student_Assignments.csv")
+            teacher_schedule = pd.read_csv(final_dir / "Teacher_Schedule.csv")
+            utilization_report = pd.read_csv(final_dir / "Utilization_Report.csv")
+            
+            # Create an HTML dashboard
+            html = f"""
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>School Schedule Optimization Results</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; }}
+                    .dashboard {{ max-width: 1200px; margin: 0 auto; }}
+                    .summary {{ background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}
+                    .metrics {{ display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 20px; }}
+                    .metric-card {{ background-color: #fff; border: 1px solid #ddd; border-radius: 5px; padding: 15px; flex: 1; min-width: 200px; }}
+                    .metric-value {{ font-size: 24px; font-weight: bold; margin-top: 10px; }}
+                    h1, h2, h3 {{ color: #2c3e50; }}
+                    table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
+                    th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                    th {{ background-color: #f2f2f2; }}
+                    tr:nth-child(even) {{ background-color: #f9f9f9; }}
+                </style>
+            </head>
+            <body>
+                <div class="dashboard">
+                    <h1>School Schedule Optimization Results</h1>
+                    
+                    <div class="summary">
+                        <h2>Summary</h2>
+                        <p>Generated on {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
+                        <p>Total iterations: {metrics.get("iterations", "N/A")}</p>
+                        <p>Total runtime: {metrics.get("total_time", 0):.2f} seconds</p>
                     </div>
-                    <div class="metric">
-                        <h3>Scheduled Sections</h3>
-                        <p>{summary['scheduled_sections']}</p>
+                    
+                    <div class="metrics">
+                        <div class="metric-card">
+                            <h3>Sections</h3>
+                            <div class="metric-value">{len(master_schedule)}</div>
+                        </div>
+                        <div class="metric-card">
+                            <h3>Students Assigned</h3>
+                            <div class="metric-value">{len(student_assignments["Student ID"].unique())}</div>
+                        </div>
+                        <div class="metric-card">
+                            <h3>Total Assignments</h3>
+                            <div class="metric-value">{len(student_assignments)}</div>
+                        </div>
+                        <div class="metric-card">
+                            <h3>Average Utilization</h3>
+                            <div class="metric-value">{utilization_report["Utilization"].mean():.2%}</div>
+                        </div>
                     </div>
-                    <div class="metric">
-                        <h3>Total Assignments</h3>
-                        <p>{summary['total_assignments']}</p>
-                    </div>
-                    <div class="metric">
-                        <h3>Total Students</h3>
-                        <p>{summary['total_students']}</p>
-                    </div>
-                    <div class="metric">
-                        <h3>Average Utilization</h3>
-                        <p>{summary['average_utilization']:.2%}</p>
-                    </div>
-                    <div class="metric">
-                        <h3>Min Utilization</h3>
-                        <p>{summary['min_utilization']:.2%}</p>
-                    </div>
-                    <div class="metric">
-                        <h3>Max Utilization</h3>
-                        <p>{summary['max_utilization']:.2%}</p>
-                    </div>
-                    <div class="metric">
-                        <h3>Underutilized Sections</h3>
-                        <p>{summary['underutilized_sections']}</p>
-                    </div>
-                    <div class="metric">
-                        <h3>Iterations</h3>
-                        <p>{summary['iterations']}</p>
-                    </div>
-                    <div class="metric">
-                        <h3>Total Time</h3>
-                        <p>{summary['total_time']:.2f}s</p>
-                    </div>
-                </div>
-                
-                <div class="card">
+                    
                     <h2>Utilization Report</h2>
                     <table>
                         <tr>
                             <th>Section ID</th>
                             <th>Course ID</th>
                             <th>Capacity</th>
-                            <th>Enrollment</th>
+                            <th>Enrolled</th>
                             <th>Utilization</th>
-                            <th>Status</th>
                         </tr>
-                        {"".join(f"<tr><td>{row['Section ID']}</td><td>{row['Course ID']}</td><td>{row['Capacity']}</td><td>{row['Enrollment']}</td><td>{row['Utilization']:.2%}</td><td>{row['Status']}</td></tr>" for _, row in utilization_df.iterrows())}
+            """
+            
+            # Add utilization report rows
+            for _, row in utilization_report.iterrows():
+                html += f"""
+                        <tr>
+                            <td>{row.get("Section ID", "")}</td>
+                            <td>{row.get("Course ID", "")}</td>
+                            <td>{int(row.get("Capacity", 0))}</td>
+                            <td>{int(row.get("Enrolled", 0))}</td>
+                            <td>{float(row.get("Utilization", 0)):.2%}</td>
+                        </tr>
+                """
+                
+            html += """
+                    </table>
+                    
+                    <h2>Performance Metrics</h2>
+                    <table>
+                        <tr>
+                            <th>Component</th>
+                            <th>Time (seconds)</th>
+                            <th>Percentage</th>
+                        </tr>
+            """
+            
+            # Add performance metrics
+            total_time = metrics.get("total_time", 0)
+            if total_time > 0:
+                for component, time_value in metrics.items():
+                    if component != "total_time" and component != "iterations":
+                        percentage = (time_value / total_time) * 100
+                        html += f"""
+                            <tr>
+                                <td>{component.replace("_time", "").title()}</td>
+                                <td>{time_value:.2f}</td>
+                                <td>{percentage:.2f}%</td>
+                            </tr>
+                        """
+                        
+            html += """
                     </table>
                 </div>
-            </div>
-        </body>
-        </html>
-        """
-        
-        # Save the HTML dashboard
-        with open(output_dir / "dashboard.html", "w") as f:
-            f.write(html)
+            </body>
+            </html>
+            """
+            
+            # Write dashboard to file
+            with open(final_dir / "dashboard.html", "w") as f:
+                f.write(html)
+                
+            logger.info(f"Dashboard generated at {final_dir / 'dashboard.html'}")
+            
+        except Exception as e:
+            logger.error(f"Error creating dashboard: {str(e)}")
 
-# Main function to run the pipeline
-def main():
-    """
-    Main function to run the optimization pipeline from command line.
-    """
-    parser = argparse.ArgumentParser(description="School Schedule Optimization Pipeline")
-    parser.add_argument("--input_dir", type=str, required=True, help="Directory with input files")
-    parser.add_argument("--output_dir", type=str, required=True, help="Directory for output files")
-    parser.add_argument("--threshold", type=float, default=0.75, help="Minimum utilization threshold (0-1)")
-    args = parser.parse_args()
+    def _create_utilization_report(self, sections_file: Path, assignments_file: Path, 
+                                 output_file: Path):
+        """
+        Create a utilization report for all sections.
+        
+        Args:
+            sections_file: Path to the sections CSV file
+            assignments_file: Path to the student assignments CSV file
+            output_file: Path to save the utilization report
+        """
+        try:
+            # Load data
+            sections = pd.read_csv(sections_file)
+            assignments = pd.read_csv(assignments_file)
+            
+            # Calculate enrollment for each section
+            enrollment = assignments.groupby('Section ID').size().reset_index(name='Enrolled')
+            
+            # Merge with sections data
+            utilization = pd.merge(
+                sections[['Section ID', 'Course ID', '# of Seats Available']], 
+                enrollment,
+                on='Section ID',
+                how='left'
+            )
+            
+            # Fill missing values with 0
+            utilization['Enrolled'] = utilization['Enrolled'].fillna(0)
+            
+            # Calculate utilization ratio
+            utilization['Utilization'] = utilization['Enrolled'] / utilization['# of Seats Available']
+            
+            # Rename columns for clarity
+            utilization = utilization.rename(columns={'# of Seats Available': 'Capacity'})
+            
+            # Save to file
+            utilization.to_csv(output_file, index=False)
+            logger.info(f"Utilization report saved to {output_file}")
+            
+            return utilization
+            
+        except Exception as e:
+            logger.error(f"Error creating utilization report: {str(e)}")
+            return None
+
+    def run(self) -> Dict:
+        """
+        Run the optimization pipeline.
+        
+        Returns:
+            Dictionary with results and performance metrics
+        """
+        start_time = time.time()
+        logger.info(f"Starting optimization pipeline with input directory: {self.input_dir}")
+        logger.info(f"Output directory: {self.output_dir}")
+        logger.info(f"Utilization threshold: {self.utilization_threshold:.2%}")
+        
+        current_input_dir = self.input_dir
+        iteration = 0
+        all_iterations_complete = False
+        
+        # Initialize metrics.json
+        metrics_file = self.output_dir / "metrics.json"
+        
+        try:
+            while iteration < self.max_iterations and not all_iterations_complete:
+                iteration += 1
+                logger.info(f"\n{'='*50}\nStarting iteration {iteration}/{self.max_iterations}\n{'='*50}")
+                
+                # Prepare iteration directory
+                iteration_dir = self._prepare_iteration_directory(iteration)
+                
+                # Stage 1: Use our ScheduleDataLoader to load data
+                logger.info(f"Stage 1: Loading data from {current_input_dir}")
+                loader_start = time.time()
+                
+                # Adjust working directory for file loading
+                original_dir = os.getcwd()
+                os.chdir(current_input_dir.parent)
+                
+                # Create a data loader
+                try:
+                    # Use the ScheduleDataLoader from load.py
+                    data_loader = ScheduleDataLoader()
+                    
+                    # Directly set the input_dir to our current_input_dir
+                    data_loader.input_dir = current_input_dir
+                    
+                    # Load all data
+                    data = data_loader.load_all()
+                    
+                    logger.info(f"Data loaded successfully from {current_input_dir}")
+                except Exception as e:
+                    logger.error(f"Error loading data with ScheduleDataLoader: {str(e)}")
+                    logger.info("Falling back to greedy loader...")
+                    
+                    # Fall back to greedy loader
+                    students, student_preferences, teachers, sections, teacher_unavailability, periods = greedy_load_data(str(current_input_dir))
+                    
+                    # Create data dict manually
+                    data = {
+                        'students': students,
+                        'student_preferences': student_preferences,
+                        'teachers': teachers,
+                        'sections': sections,
+                        'teacher_unavailability': teacher_unavailability,
+                        'periods': periods
+                    }
+                    
+                    logger.info("Data loaded successfully with fallback method")
+                
+                # Restore working directory
+                os.chdir(original_dir)
+                
+                loader_time = time.time() - loader_start
+                logger.info(f"Data loading completed in {loader_time:.2f} seconds")
+                
+                # Stage 2: Run greedy algorithm
+                logger.info("Stage 2: Running greedy algorithm for initial solution")
+                greedy_start = time.time()
+                
+                # Preprocess data
+                processed_data = preprocess_data(
+                    data['students'], 
+                    data['student_preferences'], 
+                    data['teachers'], 
+                    data['sections'], 
+                    data['teacher_unavailability'],
+                    data.get('periods', ['R1', 'R2', 'R3', 'R4', 'G1', 'G2', 'G3', 'G4'])
+                )
+                
+                # Schedule sections to periods
+                scheduled_sections = greedy_schedule_sections(data['sections'], processed_data['periods'], processed_data)
+                
+                # Assign students to sections
+                student_assignments = greedy_assign_students(data['students'], scheduled_sections, processed_data)
+                
+                # Convert to DataFrames for saving
+                master_schedule_df = pd.DataFrame([
+                    {'Section ID': section_id, 'Period': period}
+                    for section_id, period in scheduled_sections.items()
+                ])
+                
+                student_assignments_df = pd.DataFrame([
+                    {'Student ID': student_id, 'Section ID': section_id}
+                    for student_id, section_ids in student_assignments.items()
+                    for section_id in section_ids
+                ])
+                
+                # Save results
+                master_schedule_df.to_csv(iteration_dir / "Master_Schedule.csv", index=False)
+                student_assignments_df.to_csv(iteration_dir / "Student_Assignments.csv", index=False)
+                
+                # Create teacher schedule
+                section_to_teacher = data['sections'].set_index('Section ID')['Teacher Assigned'].to_dict()
+                teacher_schedule_df = pd.DataFrame([
+                    {'Teacher ID': section_to_teacher[section_id], 
+                     'Section ID': section_id, 
+                     'Period': period}
+                    for section_id, period in scheduled_sections.items()
+                    if section_id in section_to_teacher
+                ])
+                teacher_schedule_df.to_csv(iteration_dir / "Teacher_Schedule.csv", index=False)
+                
+                # Create utilization report
+                utilization_report = self._create_utilization_report(
+                    current_input_dir / "Sections_Information.csv",
+                    iteration_dir / "Student_Assignments.csv",
+                    iteration_dir / "Utilization_Report.csv"
+                )
+                
+                greedy_time = time.time() - greedy_start
+                self.metrics["greedy_time"] += greedy_time
+                logger.info(f"Greedy algorithm completed in {greedy_time:.2f} seconds")
+                
+                # Stage 3: Run MILP optimization with Gurobi
+                logger.info("Stage 3: Running MILP optimization with Gurobi")
+                milp_start = time.time()
+                
+                try:
+                    # Create a temporary directory structure for the MILP optimizer
+                    milp_input_dir = iteration_dir / "milp_input"
+                    milp_input_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # Copy the necessary files
+                    self._copy_input_files(current_input_dir, milp_input_dir)
+                    
+                    # If Greedy output exists, copy it to MILP input
+                    if (iteration_dir / "Master_Schedule.csv").exists():
+                        shutil.copy2(iteration_dir / "Master_Schedule.csv", milp_input_dir / "Master_Schedule.csv")
+                    if (iteration_dir / "Student_Assignments.csv").exists():
+                        shutil.copy2(iteration_dir / "Student_Assignments.csv", milp_input_dir / "Student_Assignments.csv")
+                    if (iteration_dir / "Teacher_Schedule.csv").exists():
+                        shutil.copy2(iteration_dir / "Teacher_Schedule.csv", milp_input_dir / "Teacher_Schedule.csv")
+                    
+                    # Adjust working directory temporarily
+                    original_dir = os.getcwd()
+                    os.chdir(str(milp_input_dir.parent))
+                    
+                    # Initialize the MILP optimizer with our custom input directory
+                    from .algorithms.milp_soft import ScheduleOptimizer
+                    
+                    # Create the optimizer with the input directory
+                    optimizer = ScheduleOptimizer(input_dir=milp_input_dir)
+                    
+                    # Create variables, constraints, and solve
+                    optimizer.create_variables()
+                    optimizer.add_constraints()
+                    optimizer.set_objective()
+                    optimizer.greedy_initial_solution()  # Use greedy warm start
+                    optimizer.solve()
+                    
+                    # Copy the MILP output to the iteration directory
+                    if os.path.exists(str(milp_input_dir / "output")):
+                        milp_output_files = ["Master_Schedule.csv", "Student_Assignments.csv", "Teacher_Schedule.csv"]
+                        for file in milp_output_files:
+                            if os.path.exists(str(milp_input_dir / "output" / file)):
+                                shutil.copy2(
+                                    str(milp_input_dir / "output" / file),
+                                    str(iteration_dir / file)
+                                )
+                                logger.info(f"Copied MILP output {file} to iteration directory")
+                    
+                    # Restore working directory
+                    os.chdir(original_dir)
+                    
+                    logger.info("MILP optimization completed successfully")
+                except Exception as e:
+                    logger.error(f"Error running MILP optimization: {str(e)}")
+                    logger.error("Stack trace:", exc_info=True)
+                    logger.warning("Continuing pipeline with greedy solution only")
+                
+                milp_time = time.time() - milp_start
+                self.metrics["milp_time"] += milp_time
+                logger.info(f"MILP optimization completed in {milp_time:.2f} seconds")
+                
+                # Check if we need to run the Claude agent (only if we have utilization below threshold)
+                need_claude_agent = False
+                
+                # Create/update the utilization report if it doesn't exist
+                if not (iteration_dir / "Utilization_Report.csv").exists():
+                    utilization_report = self._create_utilization_report(
+                        current_input_dir / "Sections_Information.csv",
+                        iteration_dir / "Student_Assignments.csv",
+                        iteration_dir / "Utilization_Report.csv"
+                    )
+                else:
+                    utilization_report = pd.read_csv(iteration_dir / "Utilization_Report.csv")
+                
+                # Check if any sections have utilization below threshold
+                if utilization_report is not None:
+                    low_utilization_sections = utilization_report[
+                        utilization_report['Utilization'] < self.utilization_threshold
+                    ]
+                    need_claude_agent = len(low_utilization_sections) > 0
+                    
+                    if need_claude_agent:
+                        logger.info(f"Found {len(low_utilization_sections)} sections below {self.utilization_threshold:.2%} utilization")
+                        for _, row in low_utilization_sections.iterrows():
+                            logger.info(f"  {row['Section ID']}: {row['Utilization']:.2%}")
+                    else:
+                        logger.info(f"All sections meet the {self.utilization_threshold:.2%} utilization target!")
+                        
+                # Stage 4: Run Claude agent for section adjustments if needed
+                if need_claude_agent:
+                    logger.info("Stage 4: Running Claude agent for section adjustments")
+                    agent_start = time.time()
+                    
+                    # Use the provided Claude API key
+                    api_key = "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"
+                    
+                    try:
+                        # Set up the utilization optimizer with the Claude API key
+                        optimizer = UtilizationOptimizer(api_key)
+                        
+                        # Update paths to match our current directory structure
+                        optimizer.input_path = current_input_dir
+                        optimizer.output_path = iteration_dir
+                        
+                        # Run the optimization
+                        optimizer.optimize()
+                        
+                        logger.info("Claude agent completed successfully")
+                    except Exception as e:
+                        logger.error(f"Error running Claude agent: {str(e)}")
+                        logger.error(f"Stack trace: ", exc_info=True)
+                    
+                    agent_time = time.time() - agent_start
+                    self.metrics["agent_time"] += agent_time
+                    logger.info(f"Claude agent completed in {agent_time:.2f} seconds")
+                else:
+                    logger.info("Skipping Claude agent as all sections meet utilization target")
+                
+                # Check if we've met the utilization target
+                if utilization_report is not None:
+                    utilization_dict = dict(zip(
+                        utilization_report['Section ID'],
+                        utilization_report['Utilization']
+                    ))
+                    
+                    all_iterations_complete = self._check_utilization_target(utilization_dict)
+                    if all_iterations_complete:
+                        logger.info("Utilization target met! Stopping iterations.")
+                    else:
+                        logger.info("Utilization target not met. Continuing to next iteration.")
+                
+                # Set up input for the next iteration
+                next_input_dir = iteration_dir / "new_inputs"
+                self._copy_input_files(current_input_dir, next_input_dir)
+                
+                # CRITICAL: Copy the latest output files to the new input directory for next iteration
+                # Copy Master_Schedule.csv to be used by the next iteration
+                if (iteration_dir / "Master_Schedule.csv").exists():
+                    logger.info("Using Master_Schedule.csv from the current iteration")
+                    shutil.copy2(iteration_dir / "Master_Schedule.csv", next_input_dir / "Master_Schedule.csv")
+                
+                # Copy Student_Assignments.csv to be used by the next iteration
+                if (iteration_dir / "Student_Assignments.csv").exists():
+                    logger.info("Using Student_Assignments.csv from the current iteration")
+                    shutil.copy2(iteration_dir / "Student_Assignments.csv", next_input_dir / "Student_Assignments.csv")
+                
+                # Copy Teacher_Schedule.csv to be used by the next iteration
+                if (iteration_dir / "Teacher_Schedule.csv").exists():
+                    logger.info("Using Teacher_Schedule.csv from the current iteration")
+                    shutil.copy2(iteration_dir / "Teacher_Schedule.csv", next_input_dir / "Teacher_Schedule.csv")
+                
+                # Use updated Sections_Information.csv from the optimizer
+                # The Claude agent should have modified this file
+                if (current_input_dir / "Sections_Information.csv").exists():
+                    logger.info("Using updated Sections_Information.csv for the next iteration")
+                    sections_file = current_input_dir / "Sections_Information.csv"
+                    shutil.copy2(sections_file, next_input_dir / "Sections_Information.csv")
+                    
+                # Move to the next iteration input directory
+                current_input_dir = next_input_dir
+            
+            # Copy the final results to the final directory
+            if iteration > 0:
+                final_iteration_dir = self._prepare_iteration_directory(iteration)
+                logger.info(f"Copying final results from iteration {iteration} to final directory")
+                
+                output_files = [
+                    "Master_Schedule.csv",
+                    "Student_Assignments.csv",
+                    "Teacher_Schedule.csv",
+                    "Utilization_Report.csv"
+                ]
+                
+                # Ensure the final directory exists
+                self.final_dir.mkdir(parents=True, exist_ok=True)
+                
+                # First try to copy from the last iteration directory
+                files_copied = 0
+                for filename in output_files:
+                    source_file = final_iteration_dir / filename
+                    if source_file.exists():
+                        shutil.copy2(source_file, self.final_dir / filename)
+                        logger.info(f"Copied {filename} to final directory")
+                        files_copied += 1
+                
+                # If no files were copied, try from other iteration directories in reverse order
+                if files_copied == 0:
+                    logger.warning("No files found in the final iteration directory, looking in earlier iterations")
+                    for i in range(iteration-1, 0, -1):
+                        earlier_dir = self.iterations_dir / f"iteration_{i}"
+                        if earlier_dir.exists():
+                            for filename in output_files:
+                                source_file = earlier_dir / filename
+                                if source_file.exists() and not (self.final_dir / filename).exists():
+                                    shutil.copy2(source_file, self.final_dir / filename)
+                                    logger.info(f"Copied {filename} from iteration {i} to final directory")
+                
+                # Create final utilization report if it doesn't exist
+                if not (self.final_dir / "Utilization_Report.csv").exists():
+                    logger.info("Creating final utilization report")
+                    if (self.final_dir / "Student_Assignments.csv").exists() and (current_input_dir / "Sections_Information.csv").exists():
+                        self._create_utilization_report(
+                            current_input_dir / "Sections_Information.csv",
+                            self.final_dir / "Student_Assignments.csv",
+                            self.final_dir / "Utilization_Report.csv"
+                        )
+                    else:
+                        logger.warning("Could not create final utilization report - missing required files")
+                
+                # Create a summary.json file
+                try:
+                    # Check if all required files exist
+                    has_master_schedule = (self.final_dir / "Master_Schedule.csv").exists()
+                    has_student_assignments = (self.final_dir / "Student_Assignments.csv").exists()
+                    has_teacher_schedule = (self.final_dir / "Teacher_Schedule.csv").exists()
+                    
+                    summary = {
+                        "iterations": iteration,
+                        "utilization_threshold": self.utilization_threshold,
+                        "completion_time": datetime.datetime.now().isoformat()
+                    }
+                    
+                    # Add metrics only if files exist
+                    if has_master_schedule:
+                        summary["sections"] = len(pd.read_csv(self.final_dir / "Master_Schedule.csv"))
+                    
+                    if has_student_assignments:
+                        student_assignments_df = pd.read_csv(self.final_dir / "Student_Assignments.csv")
+                        summary["students"] = len(student_assignments_df["Student ID"].unique())
+                        summary["assignments"] = len(student_assignments_df)
+                    
+                    if has_teacher_schedule:
+                        summary["teachers"] = len(pd.read_csv(self.final_dir / "Teacher_Schedule.csv")["Teacher ID"].unique())
+                    
+                    # Save the summary
+                    with open(self.final_dir / "summary.json", "w") as f:
+                        json.dump(summary, f, indent=2)
+                    
+                    logger.info("Created summary.json file")
+                    
+                    # Create an HTML dashboard
+                    self._create_dashboard(self.final_dir, {**self.metrics, "iterations": iteration})
+                    logger.info("Created HTML dashboard")
+                    
+                except Exception as e:
+                    logger.error(f"Error creating summary files: {str(e)}")
+                    logger.error("Stack trace:", exc_info=True)
+            
+            # Update the final metrics
+            self.metrics["total_time"] = time.time() - start_time
+            self.metrics["iterations"] = iteration
+            
+            # Save metrics.json
+            with open(metrics_file, "w") as f:
+                json.dump(self.metrics, f, indent=2)
+            
+            # Return results
+            return {
+                "success": True,
+                "iterations": iteration,
+                "output_dir": str(self.final_dir),
+                "metrics": self.metrics
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in optimization pipeline: {str(e)}", exc_info=True)
+            
+            # Update metrics with failure info
+            self.metrics["total_time"] = time.time() - start_time
+            self.metrics["error"] = str(e)
+            
+            # Save metrics.json even on failure
+            with open(metrics_file, "w") as f:
+                json.dump(self.metrics, f, indent=2)
+            
+            return {
+                "success": False,
+                "error": str(e),
+                "metrics": self.metrics
+            }
+
+
+if __name__ == "__main__":
+    # Example standalone usage
+    input_dir = Path("Test Input Files/")
+    output_dir = Path("output/")
     
-    # Run the pipeline
     pipeline = OptimizationPipeline(
-        input_dir=args.input_dir,
-        output_dir=args.output_dir,
-        utilization_threshold=args.threshold
+        input_dir=input_dir,
+        output_dir=output_dir,
+        utilization_threshold=0.75
     )
     
     results = pipeline.run()
-    
-    # Print summary
-    print("\nOptimization Pipeline Complete!")
-    print(f"Final results saved to: {results['output_dir']}")
-    print(f"Total iterations: {results['iterations']}")
-    print(f"Total time: {results['metrics']['total_time']:.2f} seconds")
-
-if __name__ == "__main__":
-    main()
+    print(f"Pipeline completed with {'success' if results['success'] else 'failure'}")
+    print(f"Results directory: {results.get('output_dir', 'N/A')}")
+    print(f"Total iterations: {results.get('iterations', 0)}")
+    print(f"Total runtime: {results.get('metrics', {}).get('total_time', 0):.2f} seconds")

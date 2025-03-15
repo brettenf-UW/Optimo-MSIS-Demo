@@ -1,12 +1,9 @@
 {
-  "total_sections": 29,
-  "scheduled_sections": 29,
-  "total_assignments": 467,
-  "total_students": 100,
-  "average_utilization": 0.5651888341543514,
-  "min_utilization": 0.2571428571428571,
-  "max_utilization": 0.8666666666666667,
-  "underutilized_sections": 25,
   "iterations": 5,
-  "total_time": 0
+  "utilization_threshold": 0.75,
+  "completion_time": "2025-03-15T03:18:21.965561",
+  "sections": 30,
+  "students": 100,
+  "assignments": 416,
+  "teachers": 16
 }

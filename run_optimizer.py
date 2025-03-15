@@ -47,7 +47,7 @@ def main():
     parser.add_argument("--algorithm", type=str, default="both", choices=["greedy", "milp", "both"], 
                        help="Which algorithm to use: greedy, milp, or both")
     parser.add_argument("--claude-api-key", type=str, 
-                       default="ba446ea2-f2f6-4614-8e8f-aa378d1404b5",
+                       default="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",
                        help="Claude API key for section adjustment")
     args = parser.parse_args()
 

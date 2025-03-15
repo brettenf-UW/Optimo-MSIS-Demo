@@ -11,6 +11,9 @@ pandas==2.1.0
 gurobipy==10.0.0
 pulp==2.7.0
 
+# AI and LLM integrations
+anthropic>=0.5.0
+
 # Testing and linting
 pytest==7.4.0
 pytest-cov==4.1.0

@@ -1,10 +1,7 @@
 {
-  "total_time": 47.82195591926575,
-  "greedy_time": 0.48185205459594727,
-  "milp_time": 0.45831751823425293,
-  "agent_time": 46.83334922790527,
-  "initial_utilization": 0.47031055900621116,
-  "final_utilization": 0.5651888341543514,
-  "iterations": 5,
-  "sections_adjusted": 125
+  "greedy_time": 0.2456974983215332,
+  "milp_time": 116.98567843437195,
+  "agent_time": 91.33168363571167,
+  "total_time": 208.64971828460693,
+  "iterations": 5
 }
