@@ -134,47 +134,11 @@ class MILPOptimizer:
         model.setParam('NodefileDir', node_dir)
         
         # Create decision variables
-        
-        # 1. Section to period assignment variables
-        section_period = {}
-        
-        # First, handle special course sections with fixed periods
-        for course, allowed_periods in self.course_period_restrictions.items():
-            # Find all sections for this special course
-            special_sections = [section_id for section_id, section in self.sections.items() 
-                               if section.course_id == course]
-            
-            # For each special section, create variables only for allowed periods
-            for section_id in special_sections:
-                for period_id in allowed_periods:
-                    if period_id in self.periods:
-                        section_period[(section_id, period_id)] = model.addVar(
-                            vtype=GRB.BINARY,
-                            name=f"section_{section_id}_period_{period_id}"
-                        )
-                # Special sections must be assigned to exactly one of their allowed periods
-                model.addConstr(
-                    gp.quicksum(section_period[(section_id, period_id)] 
-                               for period_id in allowed_periods if period_id in self.periods) == 1,
-                    name=f"special_section_{section_id}_must_be_assigned"
-                )
-                logger.info(f"Added constraint: special section {section_id} ({course}) must be assigned to one of {allowed_periods}")
-                
-        # Then handle regular sections with all periods
-        for section_id, section in self.sections.items():
-            # Skip special sections we already handled
-            if section.course_id in self.course_period_restrictions:
-                continue
-                
-            # Regular sections can be assigned to any period
-            for period_id in self.periods:
-                section_period[(section_id, period_id)] = model.addVar(
-                    vtype=GRB.BINARY,
-                    name=f"section_{section_id}_period_{period_id}"
-                )
-        
-        # 2. Student to section assignment variables
-        student_section = {}
+
+        # Create variables matching the original implementation
+
+        # x[i,j] = 1 if student i is assigned to section j
+        student_section = {}  # Equivalent to x in original code
         for student_id, student in self.students.items():
             # Only create variables for sections that match student preferences
             if student_id in self.student_preferences:
@@ -183,10 +147,45 @@ class MILPOptimizer:
                     if section.course_id in preferred_courses:
                         student_section[(student_id, section_id)] = model.addVar(
                             vtype=GRB.BINARY,
-                            name=f"student_{student_id}_section_{section_id}"
+                            name=f"x_{student_id}_{section_id}"
                         )
+
+        # z[j,p] = 1 if section j is scheduled in period p
+        section_period = {}  # Equivalent to z in original code
+        for section_id, section in self.sections.items():
+            course_id = section.course_id
+            
+            # Use centralized method for period restrictions
+            allowed_periods = self.get_allowed_periods(course_id)
+            
+            for period_id in allowed_periods:
+                if period_id in self.periods:
+                    section_period[(section_id, period_id)] = model.addVar(
+                        vtype=GRB.BINARY,
+                        name=f"z_{section_id}_{period_id}"
+                    )
+            
+            # Special sections must be assigned to exactly one of their allowed periods
+            if course_id in self.course_period_restrictions:
+                model.addConstr(
+                    gp.quicksum(section_period[(section_id, period_id)] 
+                              for period_id in allowed_periods if period_id in self.periods) == 1,
+                    name=f"special_section_{section_id}_must_be_assigned"
+                )
+                logger.info(f"Added constraint: special section {section_id} ({course_id}) must be assigned to one of {allowed_periods}")
         
-        # 3. Course request satisfaction variables (for soft constraints)
+        # y[i,j,p] = 1 if student i is assigned to section j in period p
+        student_section_period = {}  # Equivalent to y in original code
+        for (student_id, section_id) in student_section:
+            for period_id in self.periods:
+                if (section_id, period_id) in section_period:
+                    student_section_period[(student_id, section_id, period_id)] = model.addVar(
+                        vtype=GRB.BINARY,
+                        name=f"y_{student_id}_{section_id}_{period_id}"
+                    )
+        
+        # Soft constraint variables
+        # missed_request[i,c] = 1 if student i doesn't get course c they requested
         missed_request = {}
         for student_id, student_pref in self.student_preferences.items():
             for course_id in student_pref.preferred_courses:
@@ -195,7 +194,7 @@ class MILPOptimizer:
                     name=f"missed_{student_id}_{course_id}"
                 )
                 
-        # 4. Section capacity violation variables (for soft constraints)
+        # capacity_violation[j] = how many students over capacity are assigned to section j
         capacity_violation = {}
         for section_id, section in self.sections.items():
             capacity_violation[section_id] = model.addVar(
@@ -203,20 +202,6 @@ class MILPOptimizer:
                 lb=0,
                 name=f"capacity_violation_{section_id}"
             )
-            
-        # 5. Student-section-period variables (for linearized constraints)
-        student_section_period = {}
-        for student_id in self.students:
-            if student_id in self.student_preferences:
-                preferred_courses = self.student_preferences[student_id].preferred_courses
-                for section_id, section in self.sections.items():
-                    if section.course_id in preferred_courses:
-                        for period_id in self.periods:
-                            if (section_id, period_id) in section_period:
-                                student_section_period[(student_id, section_id, period_id)] = model.addVar(
-                                    vtype=GRB.BINARY,
-                                    name=f"student_{student_id}_section_{section_id}_period_{period_id}"
-                                )
         
         # Add constraints
         
@@ -413,37 +398,37 @@ class MILPOptimizer:
         
         # Apply warm start and heuristic guidance if available
         if self.warm_start:
-            logger.info("Applying greedy solution as warm start and heuristic")
+            logger.info("Applying greedy solution as warm start using variable names")
             
             # Use slightly relaxed tolerances for warm start feasibility
             model.setParam('FeasibilityTol', 1e-5) # Slightly relaxed tolerance for feasibility
-            model.setParam('IntFeasTol', 1e-5)   # Slightly relaxed tolerance for integer feasibility
+            
+            # Create a warm start solution dictionary mapping variable names to values
+            warm_start_solution = {}
+            section_count = 0
             
             try:
-                # Set initial section-period assignments from warm start ONLY if consistent with constraints
+                # Collect section-period assignments from warm start
                 for section_id, section in self.warm_start.sections.items():
                     if section.is_scheduled and section_id in self.sections:
                         period_id = section.period_id
                         course_id = self.sections[section_id].course_id
                         
-                        # Validate warm start - skip if it violates constraints
-                        valid_warm_start = True
-                        
                         # Skip if section doesn't exist in current data
                         if section_id not in self.sections:
                             logger.warning(f"Skipping warm start: section {section_id} not found in current data")
-                            valid_warm_start = False
+                            continue
                             
                         # Check special course period restrictions
                         if course_id in self.course_period_restrictions:
                             allowed_periods = self.course_period_restrictions[course_id]
                             if period_id not in allowed_periods:
                                 logger.warning(f"Skipping warm start: section {section_id} ({course_id}) can't be in period {period_id}")
-                                logger.warning(f"Allowed periods are: {allowed_periods}")
-                                valid_warm_start = False
+                                continue
                                 
                         # Check teacher conflicts
                         teacher_id = self.sections[section_id].teacher_id
+                        has_conflict = False
                         for other_id, other_section in self.warm_start.sections.items():
                             if (other_id != section_id and 
                                 other_section.is_scheduled and 
@@ -451,41 +436,64 @@ class MILPOptimizer:
                                 other_id in self.sections and
                                 self.sections[other_id].teacher_id == teacher_id):
                                 logger.warning(f"Skipping warm start: teacher {teacher_id} has conflict in period {period_id}")
-                                valid_warm_start = False
+                                has_conflict = True
                                 break
                                 
-                        # Only use warm start values that satisfy all constraints
-                        if not valid_warm_start:
+                        if has_conflict:
                             continue
+                
+                        # We need to try multiple naming formats since we don't know which one the model uses
+                        # These are the possible naming conventions for section-period variables
+                        possible_var_names = [
+                            f"z_{section_id}_{period_id}",
+                            f"section_{section_id}_period_{period_id}",
+                            f"z[{section_id},{period_id}]",
+                            f"section[{section_id},{period_id}]",
+                            f"section_period[{section_id},{period_id}]"
+                        ]
+                        
+                        for name in possible_var_names:
+                            warm_start_solution[name] = 1.0
+                        
+                        section_count += 1
+                
+                # Debug: List all model variable names so we can see the actual naming pattern
+                var_names = [var.VarName for var in model.getVars()]
+                first_100_names = var_names[:min(100, len(var_names))]
+                logger.info(f"Sample variable names in model: {first_100_names[:10]}")
+                
+                # Try a direct approach first - since we have section_period which is a dictionary of Gurobi vars
+                direct_set_count = 0
+                for section_id, section in self.warm_start.sections.items():
+                    if section.is_scheduled and section_id in self.sections and section.period_id in self.periods:
+                        key = (section_id, section.period_id)
+                        if key in section_period:
+                            # Direct dictionary access to the variable
+                            section_period[key].start = 1.0
+                            direct_set_count += 1
                             
-                        if (section_id, period_id) in section_period:
-                            try:
-                                # Both set Start (for warm start) and set obj coefficient (for heuristic guidance)
-                                section_period[(section_id, period_id)].Start = 1.0
-                                # Slightly increase the objective coefficient to encourage using this assignment
-                                model.chgCoeff(model.getObjective(), section_period[(section_id, period_id)], 11)  
-                                logger.debug(f"Warm start: section {section_id} assigned to period {period_id}")
-                            except Exception as e:
-                                logger.warning(f"Failed to set warm start for section {section_id} in period {period_id}: {str(e)}")
-                                
-                # Set initial student-section assignments from warm start
-                for assignment in self.warm_start.assignments:
-                    student_id = assignment.student_id
-                    section_id = assignment.section_id
-                    if (student_id, section_id) in student_section:
-                        try:
-                            student_section[(student_id, section_id)].Start = 1.0
-                            # Slightly increase the objective coefficient for this assignment
-                            model.chgCoeff(model.getObjective(), student_section[(student_id, section_id)], 1.2)
-                        except Exception as e:
-                            logger.warning(f"Failed to set warm start for student {student_id} in section {section_id}: {str(e)}")
+                logger.info(f"Directly set {direct_set_count} warm start values (using direct dictionary access)")
+                
+                # Also try the variable name based approach as a backup
+                set_count = 0
+                for var in model.getVars():
+                    if var.VarName in warm_start_solution:
+                        # This is the correct way to set warm start values
+                        var.start = warm_start_solution[var.VarName]
+                        set_count += 1
+                        logger.debug(f"Set warm start value for {var.VarName} (using variable name match)")
+                
+                logger.info(f"Set {set_count} warm start values out of {section_count} identified sections")
+                
+                # We're intentionally not setting student assignments to avoid errors
+                logger.info("Skipping student assignment warm starts to avoid errors")
+                
+                # Update the model to apply the warm start values
+                model.update()
             except Exception as e:
                 logger.warning(f"Error applying warm start: {str(e)}. Continuing without warm start.")
             
-            # Just update the model to use warm start values - don't use heuristic callback
-            # This will only use the warm start for initialization and presolve
-            model.update()
-            logger.info("Applied warm start values for presolve only (no heuristic callbacks)")
+            logger.info("Applied warm start values using correct variable name-based approach")
             
         # Record build time
         self.stats['model_build_time'] = time.time() - start_time
