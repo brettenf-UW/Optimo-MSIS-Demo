@@ -274,6 +274,29 @@ class UtilizationOptimizer:
         teacher_departments = {}
         for _, row in data['teacher_info'].iterrows():
             teacher_departments[row['Teacher ID']] = row['Department']
+            
+        # Generate a unique run identifier to avoid reusing the same changes
+        run_id = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        
+        # Identify low-utilization sections
+        low_utilization_sections = []
+        if 'current_utilization_report' in data and not data['current_utilization_report'].empty:
+            utilization_df = data['current_utilization_report']
+            low_sections = utilization_df[utilization_df['Utilization'] < self.constraints['target_utilization']]
+            for _, row in low_sections.iterrows():
+                section_id = row['Section ID']
+                utilization = row['Utilization']
+                course_id = row.get('Course ID', 'Unknown')
+                low_utilization_sections.append({
+                    'section_id': section_id,
+                    'course_id': course_id,
+                    'utilization': utilization,
+                    'enrolled': row.get('Enrolled', 0),
+                    'capacity': row.get('Capacity', 0)
+                })
+                
+        # Sort by lowest utilization first
+        low_utilization_sections.sort(key=lambda x: x['utilization'])
         
         prompt = f"""As a schedule optimization expert, analyze the data and provide an optimized Sections_Information.csv file.
 Your task is to assign teachers to sections based on these rules:
@@ -284,11 +307,25 @@ SECTION SIZE CONSTRAINTS:
 - Do not create sections that would be below minimum size
 - Do not merge sections if combined size would exceed maximum
 
+URGENT: This is optimization run {run_id}. You MUST make at least one meaningful change to address utilization issues.
+Focus especially on these low-utilization sections:
+"""
+        # Add specific sections that need attention
+        if low_utilization_sections:
+            for i, section in enumerate(low_utilization_sections[:10]):  # Show top 10 worst sections
+                prompt += f"\n{i+1}. Section {section['section_id']} ({section['course_id']}): {section['utilization']:.1%} utilization ({section['enrolled']}/{section['capacity']} students)"
+        else:
+            prompt += "\nNo specific low-utilization sections identified yet."
+            
+        prompt += "\n\nYou MUST modify at least one section to improve utilization.\n"
+        
+        prompt += """
 TEACHER CONSTRAINTS:
 1. Each teacher can teach maximum 6 sections
 2. Teachers must teach within their department
 3. Current teacher loads must be considered:
 """
+
         # Add current teacher loads
         for teacher, load in teacher_loads.items():
             dept = teacher_departments.get(teacher, 'Unknown')
@@ -373,12 +410,24 @@ Include only the CSV content in your response, no explanation or other text."""
 
         return prompt
 
-    def consult_claude(self, data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
-        """Get Claude's optimized schedule as a DataFrame"""
+    def consult_claude(self, data: Dict[str, pd.DataFrame], iteration=None) -> pd.DataFrame:
+        """Get Claude's optimized schedule as a DataFrame
+        
+        Args:
+            data: Dictionary of input data frames
+            iteration: Current iteration number (if known)
+        """
+        import datetime  # Add missing datetime import
         analysis = self.analyze_utilization(data)
         prompt = self.generate_optimization_prompt(analysis, data)
         
+        # Add iteration context and timestamp to the prompt if available
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if iteration is not None:
+            prompt = f"OPTIMIZATION ITERATION {iteration} at {timestamp}\n\nIMPORTANT: You MUST make at least one MEANINGFUL and DISTINCT change to low-utilization sections. Each iteration must have DIFFERENT changes than previous iterations.\n\n" + prompt
+        
         print("\nRequesting optimized schedule from Claude...")
+        print(f"Optimization iteration: {iteration if iteration is not None else 'Unknown'}")
         response = self.client.messages.create(
             model="claude-3-opus-20240229",
             max_tokens=2000,
@@ -389,6 +438,7 @@ Include only the CSV content in your response, no explanation or other text."""
         )
 
         csv_content = response.content[0].text.strip()
+        print(f"Claude response length: {len(csv_content)} characters")
         print("\nReceived CSV content:")
         print(csv_content[:200] + "...")  # Show first few lines
         
@@ -408,7 +458,21 @@ Include only the CSV content in your response, no explanation or other text."""
                 csv_content = expected_header + '\n' + '\n'.join(lines)
             
             # Parse CSV content
-            df = pd.read_csv(io.StringIO(csv_content))
+            try:
+                df = pd.read_csv(io.StringIO(csv_content))
+                
+                # Write raw response to debug file with timestamp
+                debug_dir = self.input_path / "debug"
+                debug_dir.mkdir(exist_ok=True, parents=True)
+                debug_file = debug_dir / f"claude_response_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+                with open(debug_file, "w") as f:
+                    f.write(f"ITERATION: {iteration}\n\n")
+                    f.write(f"PROMPT:\n{prompt}\n\n")
+                    f.write(f"RESPONSE:\n{csv_content}")
+                print(f"Saved Claude response to {debug_file}")
+            except Exception as e:
+                print(f"Error parsing CSV: {e}")
+                return None
             
             # Validate required columns exist
             required_cols = ['Section ID', 'Course ID', 'Teacher Assigned', '# of Seats Available', 'Department']
@@ -616,10 +680,16 @@ Include only the CSV content in your response, no explanation or other text."""
 
         return modified_data
 
-    def optimize(self):
-        """Main optimization function"""
+    def optimize(self, iteration=None):
+        """Main optimization function
+        
+        Args:
+            iteration: Current iteration number, for tracking purposes
+        """
         print(f"Using input directory: {self.input_path}")
         print(f"Reading from output directory: {self.output_path}")
+        if iteration is not None:
+            print(f"Current optimization iteration: {iteration}")
 
         if not self.input_path.exists():
             raise FileNotFoundError(f"Input directory not found: {self.input_path}")
@@ -704,7 +774,7 @@ Include only the CSV content in your response, no explanation or other text."""
             self.output_path.mkdir(parents=True, exist_ok=True)
 
         # Get optimization recommendation as DataFrame
-        optimized_sections = self.consult_claude(data)
+        optimized_sections = self.consult_claude(data, iteration=iteration)
         
         if optimized_sections is not None:
             # Save directly to input directory

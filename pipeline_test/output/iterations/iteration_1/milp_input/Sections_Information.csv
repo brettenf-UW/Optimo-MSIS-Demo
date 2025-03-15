@@ -4,44 +4,44 @@ S002,Medical Career,T001,15,Special
 S003,Heroes Teach,T002,15,Special
 S004,Heroes Teach,T002,15,Special
 S005,English 9,T003,13,English
-S006,English 9,T003,12,English
-S007,Math 1,T006,13,Math
-S008,Math 1,T006,12,Math
+S006,English 9,T004,12,English
+S007,Math 1,T005,13,Math
+S008,Math 1,T005,12,Math
 S009,Biology,T007,13,Science
 S010,Biology,T008,12,Science
 S011,World History,T011,13,Social Studies
 S012,World History,T012,12,Social Studies
 S013,PE,T013,25,PE
-S014,PE,T013,25,PE
+S014,PE,T014,25,PE
 S015,Study Hall,T015,17,General
 S016,Study Hall,T015,16,General
 S017,Study Hall,T015,16,General
 S018,Study Hall,T015,16,General
-S019,English 10,T004,13,English
+S019,English 10,T003,13,English
 S020,English 10,T004,12,English
-S021,Math 2,T006,13,Math
-S022,Math 2,T006,12,Math
+S021,Math 2,T005,13,Math
+S022,Math 2,T005,12,Math
 S023,Chemistry,T009,13,Science
 S024,Chemistry,T010,12,Science
 S025,US History,T011,13,Social Studies
 S026,US History,T012,12,Social Studies
 S027,English 11,T003,13,English
-S028,English 11,T003,12,English
-S029,Math 3,T006,13,Math
-S030,Math 3,T006,12,Math
-S031,Physics,T009,13,Science
-S032,Physics,T010,12,Science
+S028,English 11,T004,12,English
+S029,Math 3,T005,13,Math
+S030,Math 3,T005,12,Math
+S031,Physics,T007,13,Science
+S032,Physics,T008,12,Science
 S033,Government,T011,13,Social Studies
 S034,Government,T012,12,Social Studies
 S035,Sports Med,T013,13,PE
 S036,Sports Med,T013,13,PE
 S037,Sports Med,T013,12,PE
-S038,Sports Med,T014,12,PE
-S039,English 12,T004,13,English
+S038,Sports Med,T013,12,PE
+S039,English 12,T003,13,English
 S040,English 12,T004,12,English
-S041,Math 4,T006,13,Math
-S042,Math 4,T006,12,Math
-S043,AP Biology,T007,13,Science
-S044,AP Biology,T008,12,Science
+S041,Math 4,T005,13,Math
+S042,Math 4,T005,12,Math
+S043,AP Biology,T009,13,Science
+S044,AP Biology,T010,12,Science
 S045,Economics,T011,13,Social Studies
 S046,Economics,T012,12,Social Studies

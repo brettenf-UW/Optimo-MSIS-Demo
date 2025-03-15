@@ -580,10 +580,11 @@ class OptimizationPipeline:
                         optimizer.input_path = current_input_dir
                         optimizer.output_path = iteration_dir
                         
-                        # Run the optimization
-                        optimizer.optimize()
+                        # Run the optimization, passing the current iteration number
+                        # This helps Claude understand context and make unique changes each iteration
+                        optimizer.optimize(iteration=iteration)
                         
-                        logger.info("Claude agent completed successfully")
+                        logger.info(f"Claude agent completed successfully on iteration {iteration}")
                     except Exception as e:
                         logger.error(f"Error running Claude agent: {str(e)}")
                         logger.error(f"Stack trace: ", exc_info=True)
@@ -629,11 +630,17 @@ class OptimizationPipeline:
                 
                 # Use updated Sections_Information.csv from the optimizer
                 # The Claude agent should have modified this file
-                if (current_input_dir / "Sections_Information.csv").exists():
-                    logger.info("Using updated Sections_Information.csv for the next iteration")
+                # First check if Claude wrote the file to optimizer.input_path
+                claude_updated_file = optimizer.input_path / "Sections_Information.csv"
+                if claude_updated_file.exists():
+                    logger.info("Using Claude-updated Sections_Information.csv for the next iteration")
+                    shutil.copy2(claude_updated_file, next_input_dir / "Sections_Information.csv")
+                # Fallback to current_input_dir if Claude didn't modify it
+                elif (current_input_dir / "Sections_Information.csv").exists():
+                    logger.info("Using existing Sections_Information.csv for the next iteration")
                     sections_file = current_input_dir / "Sections_Information.csv"
                     shutil.copy2(sections_file, next_input_dir / "Sections_Information.csv")
-                    
+                
                 # Move to the next iteration input directory
                 current_input_dir = next_input_dir
             
