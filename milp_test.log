@@ -260,3 +260,4 @@ Traceback (most recent call last):
 TypeError: __init__() missing 1 required positional argument: 'sections'
 2025-03-15 01:54:38,241 - milp_test - INFO - Test completed!
 2025-03-15 01:55:17,770 - gurobipy.gurobipy - INFO -      0     0 1493.68584    0 6746 -5791.0000 1493.68584   126%     -  219s
+2025-03-15 01:56:02,878 - gurobipy.gurobipy - INFO -      0     0 1491.37100    0 6656 -5791.0000 1491.37100   126%     -  264s
